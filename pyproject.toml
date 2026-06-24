@@ -1,0 +1,36 @@
+[project]
+name = "sphinx-riddle-whisper"
+version = "0.1.0"
+description = "Sphinx extension that shows full glossary term definitions in a popup (no truncation, offline, vanilla JS)."
+readme = "README.rst"
+requires-python = ">=3.14"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "usaturn" }]
+dependencies = [
+    "sphinx>=9",
+    "nh3",
+]
+
+[project.urls]
+Homepage = "https://github.com/usaturn/sphinx-riddle-whisper"
+
+[build-system]
+requires = ["uv_build>=0.11.21,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+# Module is discovered under src/ by default (src/sphinx_riddle_whisper).
+# static/ lives inside the module dir, so it is included in the wheel automatically.
+# tests/, package.json and node_modules sit outside src/ and are never part of the wheel.
+module-name = "sphinx_riddle_whisper"
+module-root = "src"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "beautifulsoup4",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
