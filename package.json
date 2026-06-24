@@ -1,0 +1,18 @@
+{
+  "name": "sphinx-riddle-whisper-dev",
+  "version": "0.0.0",
+  "description": "Dev-only JS tooling (lint + unit tests) for sphinx-riddle-whisper. Not shipped in the wheel.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint src/sphinx_riddle_whisper/static tests/js",
+    "test": "node --test 'tests/js/**/*.test.mjs'"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@eslint/js": "^9",
+    "eslint": "^9",
+    "eslint-plugin-no-unsanitized": "^4",
+    "jsdom": "^25"
+  }
+}
