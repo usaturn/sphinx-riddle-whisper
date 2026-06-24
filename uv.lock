@@ -345,7 +345,7 @@ wheels = [
 
 [[package]]
 name = "sphinx-riddle-whisper"
-version = "0.1.0rc2"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "nh3" },
