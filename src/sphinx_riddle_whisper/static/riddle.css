@@ -1,0 +1,109 @@
+/* sphinx-riddle-whisper popover styles (implemented in #19) */
+
+:root {
+  --riddle-max-height: 24rem;
+  --riddle-max-width: 32rem;
+  --riddle-bg: #ffffff;
+  --riddle-fg: #1a1a1a;
+  --riddle-border: #d0d0d0;
+  --riddle-radius: 0.5rem;
+  --riddle-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --riddle-padding: 0.75rem;
+  --riddle-th-bg: #f0f0f0;
+  --riddle-code-bg: #f4f4f4;
+  --riddle-backdrop: rgba(0, 0, 0, 0.85);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --riddle-bg: #1a1a1a;
+    --riddle-fg: #f0f0f0;
+    --riddle-border: #404040;
+    --riddle-th-bg: #2a2a2a;
+    --riddle-code-bg: #2a2a2a;
+    --riddle-backdrop: rgba(0, 0, 0, 0.9);
+  }
+}
+
+.riddle-popover {
+  position: fixed;
+  z-index: 2147483647;
+  max-height: var(--riddle-max-height);
+  max-width: var(--riddle-max-width);
+  overflow-y: auto;
+  background: var(--riddle-bg);
+  color: var(--riddle-fg);
+  border: 1px solid var(--riddle-border);
+  border-radius: var(--riddle-radius);
+  box-shadow: var(--riddle-shadow);
+  padding: var(--riddle-padding);
+  text-align: left;
+}
+
+.riddle-popover *,
+.riddle-popover *::before,
+.riddle-popover *::after {
+  color: var(--riddle-fg) !important;
+  background: transparent !important;
+}
+
+.riddle-popover th {
+  background: var(--riddle-th-bg) !important;
+}
+
+.riddle-popover pre,
+.riddle-popover div.highlight,
+.riddle-popover .highlight pre,
+.riddle-popover code,
+.riddle-popover kbd,
+.riddle-popover samp {
+  background: var(--riddle-code-bg) !important;
+}
+
+.riddle-popover[hidden] {
+  display: none;
+}
+
+.riddle-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--riddle-backdrop);
+}
+
+.riddle-lightbox img {
+  max-width: 90vw;
+  max-height: 90vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  box-shadow: var(--riddle-shadow);
+  border-radius: var(--riddle-radius);
+}
+
+.riddle-lightbox[hidden] {
+  display: none;
+}
+
+.riddle-lightbox__close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0.5rem;
+  color: white;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+@media print {
+  .riddle-lightbox {
+    display: none !important;
+  }
+}
