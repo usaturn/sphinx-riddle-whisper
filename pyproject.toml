@@ -1,6 +1,6 @@
 [project]
 name = "sphinx-riddle-whisper"
-version = "0.1.0rc1"
+version = "0.1.0rc2"
 description = "Sphinx extension that shows full glossary term definitions in a popup (no truncation, offline, vanilla JS)."
 readme = "README.rst"
 requires-python = ">=3.14"
@@ -30,6 +30,7 @@ module-root = "src"
 dev = [
     "pytest>=8",
     "beautifulsoup4",
+    "pyyaml>=6.0.3",
 ]
 
 [tool.pytest.ini_options]
