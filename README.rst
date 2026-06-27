@@ -47,8 +47,8 @@ Features
 Requirements
 ============
 
-- Python >= 3.12
-- Sphinx >= 9
+- Python >= 3.11
+- Sphinx >= 8
 
 Installation
 ============

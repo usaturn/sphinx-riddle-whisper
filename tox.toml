@@ -1,5 +1,5 @@
 requires = ["tox>=4.22", "tox-uv>=1.13"]
-env_list = ["py312", "py313", "py314"]
+env_list = ["py311", "py312", "py313", "py314"]
 
 [env_run_base]
 runner = "uv-venv-lock-runner"

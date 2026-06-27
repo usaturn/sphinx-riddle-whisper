@@ -13,5 +13,5 @@ jobs:
     - name: Install uv
       uses: astral-sh/setup-uv@v7
 
-    - name: Run tox (py312/py313/py314)
+    - name: Run tox (py311/py312/py313/py314)
       run: uvx --with tox-uv tox run
