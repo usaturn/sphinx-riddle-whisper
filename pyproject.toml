@@ -3,19 +3,20 @@ name = "sphinx-riddle-whisper"
 version = "0.1.1"
 description = "Sphinx extension that shows full glossary term definitions in a popup (no truncation, offline, vanilla JS)."
 readme = "README.rst"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "usaturn" }]
 classifiers = [
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
     "Framework :: Sphinx :: Extension",
 ]
 dependencies = [
-    "sphinx>=9",
+    "sphinx>=8",
     "nh3",
 ]
 
