@@ -49,7 +49,7 @@ sphinx-riddle-whisper
 ========
 
 - Python >= 3.11
-- Sphinx >= 8
+- Sphinx >= 9
 
 インストール
 ============

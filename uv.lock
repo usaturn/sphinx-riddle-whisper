@@ -587,7 +587,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "nh3" },
-    { name = "sphinx", specifier = ">=8" },
+    { name = "sphinx", specifier = ">=9" },
 ]
 
 [package.metadata.requires-dev]
