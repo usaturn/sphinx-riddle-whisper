@@ -221,9 +221,10 @@ def test_同一term_idのテンプレートはdirhtml参照ページに重複な
     )
 
     # Assert: term-0 の template が重複なくちょうど 1 回だけ注入されている
-    assert html.count('id="riddle-tip--term-0"') == 1, (
+    _term0_count = html.count('id="riddle-tip--term-0"')
+    assert _term0_count == 1, (
         "dirhtml 参照ページに term-0 の template が重複注入されている"
-        f"（出現回数={html.count('id=\"riddle-tip--term-0\"')}）"
+        f"（出現回数={_term0_count}）"
     )
 
 

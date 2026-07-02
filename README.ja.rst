@@ -48,7 +48,7 @@ sphinx-riddle-whisper
 動作要件
 ========
 
-- Python >= 3.14
+- Python >= 3.11
 - Sphinx >= 9
 
 インストール

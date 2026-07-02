@@ -1,0 +1,17 @@
+name: test matrix
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v6
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+
+    - name: Run tox (py311/py312/py313/py314)
+      run: uvx --with tox-uv tox run
