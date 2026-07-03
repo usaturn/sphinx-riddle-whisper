@@ -37,9 +37,9 @@ docs/reviews/
 
 # AI
 .claude/
+.mcp.json
 CLAUDE.md
 
 # Env
 .env*
 .devcontainer
-
