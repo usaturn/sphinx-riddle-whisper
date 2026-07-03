@@ -672,6 +672,9 @@ export function installRiddlePopover(doc, options = {}) {
     // id 未設定（null）または空文字なら既定 id を与えてから参照する。
     const popoverId = popover.getAttribute("id") || POPOVER_ID;
     popover.setAttribute("id", popoverId);
+    if (activeTrigger !== null && activeTrigger !== result.trigger) {
+      activeTrigger.removeAttribute("aria-describedby");
+    }
     result.trigger.setAttribute("aria-describedby", popoverId);
     // 閉じる時の aria-describedby 除去・focus 復帰のため、起点とトリガを記録する。
     activeTrigger = result.trigger;
@@ -696,6 +699,10 @@ export function installRiddlePopover(doc, options = {}) {
     const popover = doc.querySelector(POPOVER_SELECTOR);
     if (popover !== null) {
       popover.setAttribute("hidden", "");
+    }
+    if (detachReposition !== null) {
+      detachReposition();
+      detachReposition = null;
     }
     // a11y: 閉じる時に aria-describedby を除去し、focus 起点で開いていた場合のみ
     // トリガ要素へ focus を戻す（hover 起点では戻さない）。

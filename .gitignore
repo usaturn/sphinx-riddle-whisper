@@ -13,7 +13,16 @@ build/
 
 # Node (dev-only, never shipped)
 node_modules/
-yarn.lock
+package-lock.json
+
+# Yarn Berry
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+.pnp.*
 
 # Sphinx build output
 docs/_build/
@@ -23,12 +32,14 @@ tmp/
 docs_draft
 *-workspace/
 .superpowers/
+docs/superpowers/
+docs/reviews/
 
 # AI
 .claude/
+.mcp.json
 CLAUDE.md
 
 # Env
 .env*
 .devcontainer
-

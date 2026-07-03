@@ -702,6 +702,80 @@ test("境界: 別トリガへ切替表示しても古い scroll/resize リスナ
   );
 });
 
+const closeRepositionCases = [
+  {
+    name: "外側クリック",
+    close: (doc, win) => {
+      doc.body.dispatchEvent(
+        new win.MouseEvent("click", { bubbles: true, cancelable: true }),
+      );
+    },
+  },
+  {
+    name: "Esc",
+    close: (doc, win) => {
+      doc.dispatchEvent(
+        new win.KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    },
+  },
+];
+
+for (const { name, close } of closeRepositionCases) {
+  test(`境界: ${name}で閉じると scroll/resize 追従リスナが解除され純増0になる`, () => {
+    // Arrange: 表示時に scroll/resize リスナが登録される DOM 契約を組む。
+    const doc = docWithTriggers();
+    const win = doc.defaultView;
+    Object.defineProperty(win, "innerWidth", { value: 1000, configurable: true });
+    Object.defineProperty(win, "innerHeight", { value: 800, configurable: true });
+    const proto = win.HTMLElement.prototype;
+    Object.defineProperty(proto, "offsetWidth", { value: 300, configurable: true });
+    Object.defineProperty(proto, "offsetHeight", { value: 150, configurable: true });
+    const trigger = doc.querySelector('a[href="#term-0"]');
+    trigger.getBoundingClientRect = () => ({
+      top: 100,
+      left: 200,
+      bottom: 120,
+      right: 260,
+      width: 60,
+      height: 20,
+    });
+
+    const added = { scroll: 0, resize: 0 };
+    const removed = { scroll: 0, resize: 0 };
+    const originalAdd = win.addEventListener.bind(win);
+    const originalRemove = win.removeEventListener.bind(win);
+    win.addEventListener = (type, listener, options) => {
+      if (type === "scroll" || type === "resize") {
+        added[type] += 1;
+      }
+      return originalAdd(type, listener, options);
+    };
+    win.removeEventListener = (type, listener, options) => {
+      if (type === "scroll" || type === "resize") {
+        removed[type] += 1;
+      }
+      return originalRemove(type, listener, options);
+    };
+
+    installRiddlePopover(doc, { trigger: "click" });
+    trigger.dispatchEvent(
+      new win.MouseEvent("click", { bubbles: true, cancelable: true }),
+    );
+
+    // Act: 表示中の popover を閉じる。
+    close(doc, win);
+
+    // Assert: 表示時に張った scroll/resize リスナが閉じる時点で完全に解除される。
+    assert.equal(added.scroll, 1, "表示時に scroll リスナが1回登録されるべき");
+    assert.equal(added.resize, 1, "表示時に resize リスナが1回登録されるべき");
+    assert.equal(removed.scroll, 1, "閉じる時に scroll リスナが解除されるべき");
+    assert.equal(removed.resize, 1, "閉じる時に resize リスナが解除されるべき");
+    assert.equal(added.scroll - removed.scroll, 0, "scroll リスナの純増は0であるべき");
+    assert.equal(added.resize - removed.resize, 0, "resize リスナの純増は0であるべき");
+  });
+}
+
 // 異常（配線・t6・fail-safe）: doc.defaultView（window）が無いケースでも、
 // click ハンドラは例外を出さず、走査済み fragment の挿入と hidden 解除までは行い、
 // 配置・追従配線（positionPopover / attachRepositionListeners）は安全にスキップする。
@@ -1653,6 +1727,34 @@ test("a11y: 開く時に popover へ role='tooltip' を付与し、トリガへ 
     trigger.getAttribute("aria-describedby"),
     popId,
     "開く時にトリガへ aria-describedby=popover.id が設定されるべき",
+  );
+});
+
+test("a11y: 別トリガへ切替表示すると旧トリガの aria-describedby は除去される", () => {
+  // Arrange: 2 つの term トリガを click 種別で開けるようにする。
+  const doc = docWithTriggers();
+  installRiddlePopover(doc, { trigger: "click" });
+  const first = doc.querySelector('a[href="#term-0"]');
+  const second = doc.querySelector('a[href="../index.html#term-1"]');
+  const { MouseEvent } = doc.defaultView;
+
+  // Act: term-0 を開いてから term-1 へ切替表示する。
+  first.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  second.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+
+  // Assert: 共有 popover の現在内容を説明するのは新トリガだけで、旧トリガは参照を持たない。
+  const popover = doc.querySelector(".riddle-popover");
+  assert.notEqual(popover, null, "切替後も共有 popover が存在すべき");
+  const popId = popover.getAttribute("id");
+  assert.equal(
+    first.hasAttribute("aria-describedby"),
+    false,
+    "切替後、旧トリガの aria-describedby は除去されるべき",
+  );
+  assert.equal(
+    second.getAttribute("aria-describedby"),
+    popId,
+    "切替後、新トリガだけが現在の popover id を参照すべき",
   );
 });
 
