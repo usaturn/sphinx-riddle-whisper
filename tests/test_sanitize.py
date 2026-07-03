@@ -453,3 +453,39 @@ def test_enabledがFalseならバイパスして入力をそのまま返す():
     html = "<script>alert(1)</script>"
 
     assert sanitize_html(html, enabled=False) == html
+
+
+def test_code_block_plain_text_is_not_destroyed():
+    """M-1: sanitize の raw 前処理がコードブロック内の平文を破壊しないことを検証する。"""
+    html = "<pre><code>img src=data:text/html,alert(1) を書かないこと</code></pre>"
+    result = sanitize_html(html)
+    assert "img src=data:text/html,alert(1) を書かないこと" in result
+
+
+def test_text_attributes_containing_src_data_are_not_destroyed():
+    """M-1 回帰: title/alt の説明文にある ``src=data:`` は属性として扱わない。"""
+    html = (
+        '<img alt="write src=data:text/html,evil" '
+        'src="https://example.test/safe.png">'
+        '<a title="write src=data:text/html,evil" href="https://example.test/">x</a>'
+        '<img alt="1 > 0 src=data:text/html,evil" '
+        'src="https://example.test/other.png">'
+    )
+
+    result = sanitize_html(html)
+
+    assert 'alt="write src=data:text/html,evil"' in result
+    assert 'src="https://example.test/safe.png"' in result
+    assert 'title="write src=data:text/html,evil"' in result
+    assert 'href="https://example.test/"' in result
+    assert 'alt="1 > 0 src=data:text/html,evil"' in result
+    assert 'src="https://example.test/other.png"' in result
+
+
+def test_unquoted_unsafe_img_src_data_is_still_removed():
+    """M-1 回帰: 実際の引用符なし img[src=data:...] は引き続き src ごと除去する。"""
+    result = sanitize_html('<img src=data:text/html,evil alt="x">')
+
+    assert "data:text/html" not in result
+    assert "src=" not in result
+    assert 'alt="x"' in result

@@ -58,21 +58,6 @@ _URL_LIST_ATTRIBUTES_FOR_DATA_SCAN: set[str] = {
     "archive",
 }
 
-# タグを問わず src="data:..." を抽出する正規表現（src ごと除去判定に使う）。
-# nh3 パース前の raw 文字列段で効く「保険」の前処理で、対象は src のみ。
-# href の data: は nh3 パース後の attribute_filter 側（本防御）に委ねる。
-# 引用符あり（"…" / '…'）と引用符なし（空白か > まで）の両方を扱う。
-_IMG_DATA_SRC = re.compile(
-    r"""(?P<attr>\bsrc\s*=\s*
-        (?:
-            "data:(?P<dq>[^"]*)"
-          | 'data:(?P<sq>[^']*)'
-          | data:(?P<uq>[^\s>]*)
-        )
-    )""",
-    re.IGNORECASE | re.VERBOSE,
-)
-
 
 def _is_safe_image_data_uri(value: str) -> bool:
     """``data:`` URI のペイロードが安全な画像 MIME 接頭辞かを判定する。
@@ -108,6 +93,85 @@ def _contains_data_scheme_candidate(value: str, *, comma_is_separator: bool) -> 
     return pattern.search(normalized) is not None
 
 
+def _find_start_tag_end(html: str, start: int) -> int | None:
+    """``start`` 位置の開始タグについて、引用符外の ``>`` 位置を返す。"""
+    quote: str | None = None
+    pos = start + 1
+    while pos < len(html):
+        char = html[pos]
+        if quote is not None:
+            if char == quote:
+                quote = None
+        elif char == '"' or char == "'":
+            quote = char
+        elif char == ">":
+            return pos
+        pos += 1
+    return None
+
+
+def _strip_unsafe_data_src_from_tag(tag: str) -> str:
+    """1 つの開始タグから unsafe な実 ``src=data:`` 属性だけを除去する。"""
+    end = len(tag) - 1
+    pos = 1
+    while pos < end and not tag[pos].isspace() and tag[pos] not in "/>":
+        pos += 1
+
+    removals: list[tuple[int, int]] = []
+    while pos < end:
+        attr_start = pos
+        while pos < end and tag[pos].isspace():
+            pos += 1
+        if pos >= end or tag[pos] in "/>":
+            break
+
+        name_start = pos
+        while pos < end and not tag[pos].isspace() and tag[pos] not in "=/>":
+            pos += 1
+        name = tag[name_start:pos].lower()
+
+        while pos < end and tag[pos].isspace():
+            pos += 1
+
+        value = ""
+        if pos < end and tag[pos] == "=":
+            pos += 1
+            while pos < end and tag[pos].isspace():
+                pos += 1
+            if pos < end and tag[pos] in {'"', "'"}:
+                quote = tag[pos]
+                pos += 1
+                value_start = pos
+                while pos < end and tag[pos] != quote:
+                    pos += 1
+                value = tag[value_start:pos]
+                if pos < end:
+                    pos += 1
+            else:
+                value_start = pos
+                while pos < end and not tag[pos].isspace() and tag[pos] != ">":
+                    pos += 1
+                value = tag[value_start:pos]
+
+        attr_end = pos
+        preprocessed = _preprocess_url_for_scheme(value)
+        if name == "src" and preprocessed.lower().startswith("data:"):
+            payload = preprocessed[len("data:") :]
+            if not _is_safe_image_data_uri(payload):
+                removals.append((attr_start, attr_end))
+
+    if not removals:
+        return tag
+
+    parts: list[str] = []
+    last = 0
+    for start, stop in removals:
+        parts.append(tag[last:start])
+        last = stop
+    parts.append(tag[last:])
+    return "".join(parts)
+
+
 def _strip_unsafe_data_src(html: str) -> str:
     """``src="data:..."`` のうち安全な画像でないものを src ごと除去する。
 
@@ -115,13 +179,26 @@ def _strip_unsafe_data_src(html: str) -> str:
     svg+xml・非画像 ``data:`` を必ず除去する（設定で上書き不可）。
     """
 
-    def _replace(match: re.Match[str]) -> str:
-        value = match.group("dq") or match.group("sq") or match.group("uq") or ""
-        if _is_safe_image_data_uri(value):
-            return match.group("attr")
-        return ""
-
-    return _IMG_DATA_SRC.sub(_replace, html)
+    parts: list[str] = []
+    last = 0
+    pos = 0
+    while pos < len(html):
+        if (
+            html[pos] == "<"
+            and pos + 1 < len(html)
+            and html[pos + 1].isalpha()
+        ):
+            tag_end = _find_start_tag_end(html, pos)
+            if tag_end is None:
+                break
+            parts.append(html[last:pos])
+            parts.append(_strip_unsafe_data_src_from_tag(html[pos : tag_end + 1]))
+            pos = tag_end + 1
+            last = pos
+            continue
+        pos += 1
+    parts.append(html[last:])
+    return "".join(parts)
 
 
 DEFAULT_ALLOWED_TAGS: set[str] = {
