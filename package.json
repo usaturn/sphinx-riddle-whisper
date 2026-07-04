@@ -10,7 +10,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9",
-    "eslint": "^9",
+    "eslint": "^10",
     "eslint-plugin-no-unsanitized": "^4",
     "jsdom": "^25"
   },
