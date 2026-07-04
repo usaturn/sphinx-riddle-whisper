@@ -95,7 +95,7 @@ def rebase_refuri(
     if _is_external(refuri):
         return refuri
 
-    base = builder.get_relative_uri(page_docname, home_docname)
+    base: str = builder.get_relative_uri(page_docname, home_docname)
 
     if refuri.startswith("#"):
         # singlehtml では base 自体が同一ページフラグメント（例 '#document-index'）。

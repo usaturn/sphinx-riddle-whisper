@@ -15,16 +15,21 @@ from sphinx import addnodes
 
 
 class _StandardDomainLike(Protocol):
-    """``objects`` 属性を持つ StandardDomain 互換オブジェクトの構造的型。"""
+    """``objects`` 属性を持つ StandardDomain 互換オブジェクトの構造的型。
 
-    objects: dict[tuple[str, str], tuple[str, str]]
+    実 ``StandardDomain.objects`` は読み取り専用の property のため、Protocol 側も
+    読み取り専用（``@property``）として宣言し、書き込み可能属性との不一致を避ける。
+    """
+
+    @property
+    def objects(self) -> dict[tuple[str, str], tuple[str, str]]: ...
 
 
 class _EnvLike(Protocol):
     """``get_and_resolve_doctree`` を持つ BuildEnvironment 互換オブジェクトの構造的型。"""
 
     def get_and_resolve_doctree(
-        self, docname: str, builder: object
+        self, docname: str, builder: object, *, tags: object = None
     ) -> nodes.document: ...
 
 
