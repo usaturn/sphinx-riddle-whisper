@@ -55,7 +55,9 @@ def _validate_bool(name: str, value) -> None:
 def _normalize_str_iterable(name: str, value) -> tuple[str, ...]:
     """value（None 不可）を検証済みの文字列 tuple へ正規化する。"""
     if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
-        raise ExtensionError(f"{name} は文字列のリスト/集合である必要があります: {value!r}")
+        raise ExtensionError(
+            f"{name} は文字列のリスト/集合である必要があります: {value!r}"
+        )
     normalized = tuple(value)
     for item in normalized:
         _validate_type(f"{name} の要素", item, str, "str")

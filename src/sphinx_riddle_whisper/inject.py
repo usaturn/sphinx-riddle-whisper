@@ -163,9 +163,7 @@ def _as_set(value: object) -> set[str] | None:
     return set(value)  # type: ignore[arg-type]
 
 
-def inject_definition_templates(
-    app, pagename, templatename, context, doctree
-) -> None:
+def inject_definition_templates(app, pagename, templatename, context, doctree) -> None:
     """html-page-context ハンドラ。定義 HTML を ``<template>`` として注入する。
 
     ページ P が参照する各 term-id について定義 HTML を生成し、

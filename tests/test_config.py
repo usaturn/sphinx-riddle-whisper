@@ -62,7 +62,9 @@ def test_riddle_triggerが許可外の値のときExtensionErrorを送出する(
     except ExtensionError:
         pass
     else:
-        raise AssertionError("riddle_trigger='hoverr' で ExtensionError が送出されなかった")
+        raise AssertionError(
+            "riddle_trigger='hoverr' で ExtensionError が送出されなかった"
+        )
 
 
 def test_riddle_open_delay_msが負の値のときExtensionErrorを送出する():
@@ -77,7 +79,9 @@ def test_riddle_open_delay_msが負の値のときExtensionErrorを送出する(
     except ExtensionError:
         pass
     else:
-        raise AssertionError("riddle_open_delay_ms=-1 で ExtensionError が送出されなかった")
+        raise AssertionError(
+            "riddle_open_delay_ms=-1 で ExtensionError が送出されなかった"
+        )
 
 
 def test_riddle_open_delay_msが非intのときExtensionErrorを送出する():
@@ -92,7 +96,9 @@ def test_riddle_open_delay_msが非intのときExtensionErrorを送出する():
     except ExtensionError:
         pass
     else:
-        raise AssertionError("riddle_open_delay_ms='150' で ExtensionError が送出されなかった")
+        raise AssertionError(
+            "riddle_open_delay_ms='150' で ExtensionError が送出されなかった"
+        )
 
 
 def test_riddle_close_delay_msが負の値のときExtensionErrorを送出する():
@@ -107,7 +113,9 @@ def test_riddle_close_delay_msが負の値のときExtensionErrorを送出する
     except ExtensionError:
         pass
     else:
-        raise AssertionError("riddle_close_delay_ms=-1 で ExtensionError が送出されなかった")
+        raise AssertionError(
+            "riddle_close_delay_ms=-1 で ExtensionError が送出されなかった"
+        )
 
 
 def test_riddle_close_delay_msが非intのときExtensionErrorを送出する():
@@ -122,7 +130,9 @@ def test_riddle_close_delay_msが非intのときExtensionErrorを送出する():
     except ExtensionError:
         pass
     else:
-        raise AssertionError("riddle_close_delay_ms='100' で ExtensionError が送出されなかった")
+        raise AssertionError(
+            "riddle_close_delay_ms='100' で ExtensionError が送出されなかった"
+        )
 
 
 @pytest.mark.parametrize("name", ["riddle_open_delay_ms", "riddle_close_delay_ms"])
@@ -269,7 +279,7 @@ def test_register_config_valuesが全設定名をadd_config_valueで登録する
     register_config_values(app)
 
     registered = {call.args[0] for call in app.add_config_value.call_args_list}
-    assert _EXPECTED_CONFIG_NAMES <= registered
+    assert registered >= _EXPECTED_CONFIG_NAMES
 
 
 def test_riddle_footnotesの既定値がTrueのboolで登録される():

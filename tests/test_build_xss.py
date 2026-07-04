@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 
 #: 一次防御で除去されるべき危険要素/属性を表す CSS セレクタ。
 _DANGEROUS_SELECTOR = (
-    '[onerror], [onload], [onclick], script, iframe, base, object, embed, '
+    "[onerror], [onload], [onclick], script, iframe, base, object, embed, "
     'a[href^="javascript:"], a[href^="data:"], img[src^="javascript:"]'
 )
 
@@ -88,7 +88,9 @@ def test_sanitize_offでは危険要素が残る(app):
         (Path(app.outdir) / "index.html").read_text(encoding="utf-8")
     )
 
-    assert template.select(_DANGEROUS_SELECTOR), "sanitize=False なのに危険要素が残っていない"
+    assert template.select(_DANGEROUS_SELECTOR), (
+        "sanitize=False なのに危険要素が残っていない"
+    )
     assert "正常な定義テキスト" in template.get_text()
 
 

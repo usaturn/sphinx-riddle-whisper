@@ -23,6 +23,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from docutils import nodes
 
+
 def _is_external(refuri: str) -> bool:
     """refuri が外部・絶対（再ベース対象外）かどうかを返す。"""
     split = urlsplit(refuri)

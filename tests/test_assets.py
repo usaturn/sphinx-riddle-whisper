@@ -42,7 +42,7 @@ def test_html_build後にriddle_initがtype_moduleのscriptとして読み込ま
         "riddle-init.js を参照する script タグが index.html に存在しない"
     )
     assert all('type="module"' in tag for tag in init_script_tags), (
-        f"riddle-init.js の script タグに type=\"module\" が無い: {init_script_tags}"
+        f'riddle-init.js の script タグに type="module" が無い: {init_script_tags}'
     )
 
 

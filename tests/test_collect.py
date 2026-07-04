@@ -85,7 +85,9 @@ def test_同一home_docnameに対しgetを2回呼んでも解決は1回しか行
 
 def test_異なるhome_docnameはそれぞれ1回ずつ解決される():
     """異なる home_docname 'a' と 'b' を取得すると解決処理が2回呼ばれる。"""
-    fake_env = SimpleNamespace(get_and_resolve_doctree=Mock(side_effect=[object(), object()]))
+    fake_env = SimpleNamespace(
+        get_and_resolve_doctree=Mock(side_effect=[object(), object()])
+    )
     cache = HomeDoctreeCache(fake_env, SimpleNamespace())
 
     cache.get("a")

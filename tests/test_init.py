@@ -6,8 +6,11 @@ from unittest.mock import MagicMock
 from sphinx_riddle_whisper import setup
 
 
-def test_PackageNotFoundError時にversionが空でないフォールバック文字列になる(monkeypatch):
+def test_PackageNotFoundError時にversionが空でないフォールバック文字列になる(
+    monkeypatch,
+):
     """バージョン取得が PackageNotFoundError を送出しても、'version' は空でない文字列を返す。"""
+
     # Arrange: importlib.metadata.version が必ず PackageNotFoundError を送出するようにする
     def _raise(*args, **kwargs):
         raise importlib.metadata.PackageNotFoundError

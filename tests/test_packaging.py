@@ -42,7 +42,9 @@ def _entries_containing(namelist: list[str], token: str) -> list[str]:
     return [name for name in namelist if token in name]
 
 
-@pytest.mark.skipif(shutil.which("uv") is None, reason="uv が無い環境ではビルドできない")
+@pytest.mark.skipif(
+    shutil.which("uv") is None, reason="uv が無い環境ではビルドできない"
+)
 def test_wheelのnamelistにpackage_jsonが含まれない() -> None:
     """uv build で生成した wheel の namelist のどのエントリにも "package.json" を含む文字列が無い。
 
@@ -56,7 +58,9 @@ def test_wheelのnamelistにpackage_jsonが含まれない() -> None:
     assert offending == [], f"wheel に package.json が同梱されている: {offending}"
 
 
-@pytest.mark.skipif(shutil.which("uv") is None, reason="uv が無い環境ではビルドできない")
+@pytest.mark.skipif(
+    shutil.which("uv") is None, reason="uv が無い環境ではビルドできない"
+)
 def test_wheelのnamelistにnode_modulesが含まれない() -> None:
     """uv build で生成した wheel の namelist のどのエントリにも "node_modules" を含む文字列が無い。
 
@@ -70,7 +74,9 @@ def test_wheelのnamelistにnode_modulesが含まれない() -> None:
     assert offending == [], f"wheel に node_modules が同梱されている: {offending}"
 
 
-@pytest.mark.skipif(shutil.which("uv") is None, reason="uv が無い環境ではビルドできない")
+@pytest.mark.skipif(
+    shutil.which("uv") is None, reason="uv が無い環境ではビルドできない"
+)
 def test_wheelのnamelistにeslint_configが含まれない() -> None:
     """uv build で生成した wheel の namelist のどのエントリにも "eslint.config" を含む文字列が無い。
 
@@ -85,7 +91,9 @@ def test_wheelのnamelistにeslint_configが含まれない() -> None:
     assert offending == [], f"wheel に eslint.config が同梱されている: {offending}"
 
 
-@pytest.mark.skipif(shutil.which("uv") is None, reason="uv が無い環境ではビルドできない")
+@pytest.mark.skipif(
+    shutil.which("uv") is None, reason="uv が無い環境ではビルドできない"
+)
 def test_wheelのnamelistにtestsが含まれない() -> None:
     """wheel の namelist のどのエントリにも "tests/" を含む文字列が無い（テスト資材の非同梱）。"""
     namelist = _build_wheel_namelist()
@@ -94,7 +102,9 @@ def test_wheelのnamelistにtestsが含まれない() -> None:
     assert offending == [], f"wheel に tests/ が同梱されている: {offending}"
 
 
-@pytest.mark.skipif(shutil.which("uv") is None, reason="uv が無い環境ではビルドできない")
+@pytest.mark.skipif(
+    shutil.which("uv") is None, reason="uv が無い環境ではビルドできない"
+)
 def test_wheelに出荷物のstaticが同梱される() -> None:
     """wheel には出荷物 static/riddle.js が同梱される（dev-only 除外と出荷物保持の両立）。"""
     namelist = _build_wheel_namelist()

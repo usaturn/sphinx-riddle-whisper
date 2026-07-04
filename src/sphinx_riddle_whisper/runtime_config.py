@@ -75,7 +75,6 @@ def inject_runtime_config(app, pagename, templatename, context, doctree) -> None
     payload = build_runtime_config(app.config)
     encoded = encode_config_json(payload)
     element = (
-        f'<script type="application/json" id="{_RIDDLE_CONFIG_ID}">'
-        f"{encoded}</script>"
+        f'<script type="application/json" id="{_RIDDLE_CONFIG_ID}">{encoded}</script>'
     )
     context["body"] = context.get("body", "") + element

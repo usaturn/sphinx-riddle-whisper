@@ -77,9 +77,7 @@ def _is_safe_image_data_uri(value: str) -> bool:
 
 def _preprocess_url_for_scheme(value: str) -> str:
     """ブラウザの URL scheme 判定に近づけるため、C0/空白系の難読化を除去する。"""
-    return value.translate(_URL_ASCII_TAB_OR_NEWLINE).lstrip(
-        _C0_CONTROL_OR_SPACE
-    )
+    return value.translate(_URL_ASCII_TAB_OR_NEWLINE).lstrip(_C0_CONTROL_OR_SPACE)
 
 
 def _contains_data_scheme_candidate(value: str, *, comma_is_separator: bool) -> bool:
@@ -183,11 +181,7 @@ def _strip_unsafe_data_src(html: str) -> str:
     last = 0
     pos = 0
     while pos < len(html):
-        if (
-            html[pos] == "<"
-            and pos + 1 < len(html)
-            and html[pos + 1].isalpha()
-        ):
+        if html[pos] == "<" and pos + 1 < len(html) and html[pos + 1].isalpha():
             tag_end = _find_start_tag_end(html, pos)
             if tag_end is None:
                 break
@@ -320,9 +314,7 @@ def sanitize_html(
         if allowed_attributes is None
         else {tag: set(attrs) for tag, attrs in allowed_attributes.items()}
     )
-    schemes = (
-        DEFAULT_ALLOWED_SCHEMES if allowed_schemes is None else allowed_schemes
-    )
+    schemes = DEFAULT_ALLOWED_SCHEMES if allowed_schemes is None else allowed_schemes
 
     html = _strip_unsafe_data_src(html)
 
