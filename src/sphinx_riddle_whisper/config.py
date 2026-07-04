@@ -1,15 +1,20 @@
 """sphinx-riddle-whisper の設定値登録と検証。"""
 
 from collections.abc import Iterable
+from typing import Literal, TypeVar
 
+from sphinx.application import Sphinx
+from sphinx.config import Config
 from sphinx.errors import ExtensionError
+
+_T = TypeVar("_T")
 
 #: riddle_trigger に許可される値。
 _ALLOWED_TRIGGERS = ("hover", "click", "both")
 
 #: (name, default, rebuild) のタプルで登録する設定値。
 #: allowed_* の既定 None は「sanitize.py の組み込み許可リストを使う」を意味する。
-_CONFIG_SPECS: tuple[tuple[str, object, str], ...] = (
+_CONFIG_SPECS: tuple[tuple[str, object, Literal["html"]], ...] = (
     ("riddle_trigger", "both", "html"),
     ("riddle_max_height", "24rem", "html"),
     ("riddle_max_width", "32rem", "html"),
@@ -27,42 +32,50 @@ _CONFIG_SPECS: tuple[tuple[str, object, str], ...] = (
 )
 
 
-def register_config_values(app) -> None:
+def register_config_values(app: Sphinx) -> None:
     """全 riddle_* 設定値を登録し、'config-inited' に検証ハンドラを接続する。"""
     for name, default, rebuild in _CONFIG_SPECS:
         app.add_config_value(name, default, rebuild)
     app.connect("config-inited", validate_config)
 
 
-def _validate_type(name: str, value, expected_type, type_name: str) -> None:
-    """value の型が expected_type そのものでなければ ExtensionError を raise する。"""
+def _validate_type(
+    name: str, value: object, expected_type: type[_T], type_name: str
+) -> _T:
+    """value の型が expected_type そのものでなければ ExtensionError を raise する。
+
+    検証を通過した値は ``expected_type`` として narrowing 済みの状態で返す。
+    """
     if type(value) is not expected_type:
         raise ExtensionError(f"{name} は {type_name} である必要があります: {value!r}")
+    return value
 
 
-def _validate_non_negative_int(name: str, value) -> None:
+def _validate_non_negative_int(name: str, value: object) -> None:
     """value が 0 以上の int でなければ ExtensionError を raise する。"""
-    _validate_type(name, value, int, "int")
-    if value < 0:
+    checked = _validate_type(name, value, int, "int")
+    if checked < 0:
         raise ExtensionError(f"{name} は 0 以上である必要があります: {value!r}")
 
 
-def _validate_bool(name: str, value) -> None:
+def _validate_bool(name: str, value: object) -> None:
     """value が bool でなければ ExtensionError を raise する。"""
     _validate_type(name, value, bool, "bool")
 
 
-def _normalize_str_iterable(name: str, value) -> tuple[str, ...]:
+def _normalize_str_iterable(name: str, value: object) -> tuple[str, ...]:
     """value（None 不可）を検証済みの文字列 tuple へ正規化する。"""
     if isinstance(value, (str, bytes)) or not isinstance(value, Iterable):
-        raise ExtensionError(f"{name} は文字列のリスト/集合である必要があります: {value!r}")
+        raise ExtensionError(
+            f"{name} は文字列のリスト/集合である必要があります: {value!r}"
+        )
     normalized = tuple(value)
     for item in normalized:
         _validate_type(f"{name} の要素", item, str, "str")
     return normalized
 
 
-def validate_config(app, config) -> None:
+def validate_config(app: Sphinx, config: Config) -> None:
     """'config-inited' ハンドラ。riddle_* 値を検証し、不正なら ExtensionError を raise する。"""
     _validate_type("riddle_trigger", config.riddle_trigger, str, "str")
     if config.riddle_trigger not in _ALLOWED_TRIGGERS:
@@ -105,11 +118,11 @@ def validate_config(app, config) -> None:
         )
 
 
-def _normalize_allowed_attributes(value) -> dict[str, tuple[str, ...]]:
+def _normalize_allowed_attributes(value: object) -> dict[str, tuple[str, ...]]:
     """riddle_allowed_attributes を dict[str, tuple[str, ...]] へ正規化する。"""
-    _validate_type("riddle_allowed_attributes", value, dict, "dict")
+    validated = _validate_type("riddle_allowed_attributes", value, dict, "dict")
     normalized: dict[str, tuple[str, ...]] = {}
-    for key, attrs in value.items():
+    for key, attrs in validated.items():
         _validate_type("riddle_allowed_attributes のキー", key, str, "str")
         normalized[key] = _normalize_str_iterable(
             f"riddle_allowed_attributes[{key!r}]",

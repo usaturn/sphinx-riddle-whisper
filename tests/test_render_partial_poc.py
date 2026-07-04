@@ -55,11 +55,11 @@ def test_外部脚注用語のfragmentに外部脚注本体は含まれない(ap
 
     # Act: 外部脚注用語の definition の fragment を、識別テキストで選別して取り出す
     external_fragments = [
-        fragment
-        for fragment in fragments.values()
-        if EXTERNAL_TERM_MARKER in fragment
+        fragment for fragment in fragments.values() if EXTERNAL_TERM_MARKER in fragment
     ]
-    assert len(external_fragments) == 1, "外部脚注用語の fragment が一意に選別できること"
+    assert len(external_fragments) == 1, (
+        "外部脚注用語の fragment が一意に選別できること"
+    )
     external_fragment = external_fragments[0]
 
     # Assert: 外部脚注の本体テキストは fragment に含まれない（本体はページ側に残る）
@@ -77,11 +77,11 @@ def test_内部脚注用語のfragmentに自己完結脚注本体が含まれる
 
     # Act: 内部脚注用語の definition の fragment を、識別テキストで選別して取り出す
     internal_fragments = [
-        fragment
-        for fragment in fragments.values()
-        if INTERNAL_TERM_MARKER in fragment
+        fragment for fragment in fragments.values() if INTERNAL_TERM_MARKER in fragment
     ]
-    assert len(internal_fragments) == 1, "内部脚注用語の fragment が一意に選別できること"
+    assert len(internal_fragments) == 1, (
+        "内部脚注用語の fragment が一意に選別できること"
+    )
     internal_fragment = internal_fragments[0]
 
     # Assert: 自己完結脚注の本体テキストが fragment に含まれる（定義と一緒に旅する）

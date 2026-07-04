@@ -23,6 +23,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from docutils import nodes
 
+
 def _is_external(refuri: str) -> bool:
     """refuri が外部・絶対（再ベース対象外）かどうかを返す。"""
     split = urlsplit(refuri)
@@ -94,7 +95,7 @@ def rebase_refuri(
     if _is_external(refuri):
         return refuri
 
-    base = builder.get_relative_uri(page_docname, home_docname)
+    base: str = builder.get_relative_uri(page_docname, home_docname)
 
     if refuri.startswith("#"):
         # singlehtml では base 自体が同一ページフラグメント（例 '#document-index'）。

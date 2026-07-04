@@ -60,9 +60,7 @@ def test_同一term_idへの複数参照は重複排除される():
 
 def test_refuriとrefidの混在から両方のterm_idが集まる():
     """refuri 由来と refid 由来の term-id が DISTINCT に両方集まる。"""
-    doctree = _para_with_references(
-        _ref(refuri="g.html#term-a"), _ref(refid="term-b")
-    )
+    doctree = _para_with_references(_ref(refuri="g.html#term-a"), _ref(refid="term-b"))
 
     assert set(extract_referenced_term_ids(doctree)) == {"term-a", "term-b"}
 

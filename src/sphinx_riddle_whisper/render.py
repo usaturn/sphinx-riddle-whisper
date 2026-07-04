@@ -14,6 +14,15 @@ from __future__ import annotations
 import html
 import re
 from collections.abc import Iterable
+from typing import Protocol
+
+from docutils import nodes
+
+
+class _RenderPartialBuilder(Protocol):
+    """``render_partial(node)`` を持つ Sphinx Builder 互換オブジェクトの構造的型。"""
+
+    def render_partial(self, node: nodes.Node | None) -> dict[str, str]: ...
 
 
 def _strip_anchor_classes(html_fragment: str, classes: Iterable[str]) -> str:
@@ -41,8 +50,8 @@ def _strip_anchor_classes(html_fragment: str, classes: Iterable[str]) -> str:
 
 
 def render_definition(
-    builder,
-    definition,
+    builder: _RenderPartialBuilder,
+    definition: nodes.Element,
     *,
     strip_classes: Iterable[str] = (),
     include_term_title: bool = False,
