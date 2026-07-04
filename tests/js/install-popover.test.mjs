@@ -1005,20 +1005,36 @@ test("セキュリティ: 座標適用は CSSOM プロパティ経由のみで s
   // style.cssText setter を spy で包み、代入が呼ばれたら記録する。
   const cssTextSets = [];
   const styleObj = popover.style;
-  const cssTextDescriptor =
-    Object.getOwnPropertyDescriptor(styleObj, "cssText") ||
-    Object.getOwnPropertyDescriptor(
-      Object.getPrototypeOf(styleObj),
-      "cssText",
-    );
-  const originalCssTextSet = cssTextDescriptor.set.bind(styleObj);
-  const originalCssTextGet = cssTextDescriptor.get.bind(styleObj);
+  let cssTextDescriptor = null;
+  for (
+    let current = styleObj;
+    current !== null;
+    current = Object.getPrototypeOf(current)
+  ) {
+    cssTextDescriptor = Object.getOwnPropertyDescriptor(current, "cssText");
+    if (cssTextDescriptor !== undefined) {
+      break;
+    }
+  }
+  const originalCssTextSet =
+    typeof cssTextDescriptor?.set === "function"
+      ? cssTextDescriptor.set.bind(styleObj)
+      : null;
+  const originalCssTextGet =
+    typeof cssTextDescriptor?.get === "function"
+      ? cssTextDescriptor.get.bind(styleObj)
+      : null;
+  let fallbackCssText = String(styleObj.cssText ?? "");
   Object.defineProperty(styleObj, "cssText", {
     configurable: true,
-    get: () => originalCssTextGet(),
+    get: () => originalCssTextGet?.() ?? fallbackCssText,
     set: (value) => {
       cssTextSets.push(value);
-      originalCssTextSet(value);
+      if (originalCssTextSet !== null) {
+        originalCssTextSet(value);
+      } else {
+        fallbackCssText = String(value);
+      }
     },
   });
 
