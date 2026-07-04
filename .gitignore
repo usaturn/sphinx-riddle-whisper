@@ -36,9 +36,8 @@ docs/superpowers/
 docs/reviews/
 
 # AI
-.agents/
-.claude/
-.devenv.git/
+.agents
+.claude
 .mcp.json
 CLAUDE.md
 
