@@ -1,28 +1,40 @@
 version: 2
 updates:
-  - package-ecosystem: "uv"
-    directory: "/"
-    schedule:
-      interval: "daily"
-      time: "9:00"
-      timezone: "Asia/Tokyo"
-    labels:
-      - "dependencies"
-      - "python"
-    commit-message:
-      prefix: "chore(deps):"
-    open-pull-requests-limit: 10
-
+  # SHA ピン留めしたアクションの更新追跡
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "cron"
-      cronjob: "0 9 15 * *"
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
       timezone: "Asia/Tokyo"
-    labels:
-      - "dependencies"
-      - "github-actions"
-    commit-message:
-      prefix: "chore(deps):"
-    open-pull-requests-limit: 10
+    groups:
+      actions:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
 
+  # uv.lock の Python 依存
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    groups:
+      python:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
+
+  # yarn.lock の JS 開発ツール（dev-only、wheel には入らない）
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Tokyo"
+    groups:
+      js-dev-tools:
+        applies-to: version-updates
+        update-types: ["minor", "patch"]
