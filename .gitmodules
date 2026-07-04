@@ -1,0 +1,5 @@
+[submodule "devenv"]
+	path = devenv
+	url = https://github.com/usaturn/sphinx-riddle-whisper-devenv.git
+	branch = main
+	ignore = all
