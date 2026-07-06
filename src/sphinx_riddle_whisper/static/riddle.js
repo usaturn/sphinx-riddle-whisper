@@ -1005,14 +1005,23 @@ export function installRiddlePopover(doc, options = {}) {
   if (openOnHover) {
     // mouseenter/blur は bubbles:false のため capture フェーズの委譲で拾う。
     // focusin/blur でも mouseenter/mouseleave と同一の開閉遷移を行う。
+    // close はトリガの属するレベルだけを閉じる（ポップ内トリガ → レベル2のみ）。
     addTriggerListener("mouseenter", scheduleOpen, true);
-    addTriggerListener("mouseleave", scheduleClose, true);
+    addTriggerListener(
+      "mouseleave",
+      (triggerEl) => scheduleClose(levelOfTrigger(triggerEl)),
+      true,
+    );
     addTriggerListener(
       "focusin",
       (triggerEl) => scheduleOpen(triggerEl, true),
       true,
     );
-    addTriggerListener("blur", scheduleClose, true);
+    addTriggerListener(
+      "blur",
+      (triggerEl) => scheduleClose(levelOfTrigger(triggerEl)),
+      true,
+    );
   }
 }
 
