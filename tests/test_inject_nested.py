@@ -200,3 +200,38 @@ def test_riddle_nested切替後の増分ビルドでレベル2定義変更が参
         "riddle_nested=False→True 切替後の増分ビルドで、both.html の term-delta "
         "template に古い定義本文が残存している（切替後の増分でレベル2依存が効いていない）"
     )
+
+
+@pytest.mark.sphinx(
+    "singlehtml",
+    testroot="nested",
+    srcdir="nested-singlehtml",
+    warningiserror=True,
+)
+def test_singlehtmlでも定義内参照termのtemplateが単一ページへ注入される(app):
+    """[L-1回帰/境界] singlehtml では :term: 参照の refuri が
+    '#document-<docname>#term-*' の二重フラグメント形になり、全ドキュメントが
+    単一 index.html へ集約される。この経路でも別 home の定義内参照 term（delta）の
+    template が注入されること、および本文参照（レベル1）と定義内参照（レベル2）の
+    両経路で収集される term（beta）の template が重複しないことを固定する
+    （外部レビュー指摘 L-1: ネスト注入の singlehtml 結合テスト欠落）。
+    """
+    # Arrange & Act: testroot='nested' を singlehtml で実ビルドする
+    app.build()
+    html = (Path(app.outdir) / "index.html").read_text(encoding="utf-8")
+
+    # Assert: 別 home（glossary2）の定義内参照 term（delta）の template が
+    # 単一 index.html へ注入されている
+    assert '<template id="riddle-tip--term-delta">' in html, (
+        "singlehtml で別 home の定義内参照 term（delta）の template が単一 "
+        "index.html へ注入されていない（二重フラグメント形の term-id 抽出が"
+        "ネスト収集経路で壊れた疑い）"
+    )
+    # Assert: 本文参照と定義内参照の両経路から収集される beta の template が
+    # ちょうど1回だけ存在する（dedup の結合検証）
+    beta_count = html.count('id="riddle-tip--term-beta"')
+    assert beta_count == 1, (
+        "singlehtml で本文参照（レベル1）と定義内参照（レベル2）の両経路から"
+        f"収集される term-beta の template がちょうど1回でない（実際: {beta_count} 回）"
+        "。二重注入または注入消失が起きている。"
+    )
