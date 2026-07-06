@@ -360,7 +360,8 @@ const POPOVER_LEVEL1_SELECTOR = `.${POPOVER_CLASS}:not(${POPOVER_NESTED_SELECTOR
  * 委譲イベントの target から、指定セレクタに最も近いトリガリンクを取り出す。
  * トリガでなければ null（fail-closed）。ネスト規則:
  * レベル2ポップ配下は常に無視（固定2段）、レベル1ポップ配下は nested 有効かつ
- * term トリガのみ許可（脚注・引用・画像トリガは無視）。
+ * term トリガのみ許可（脚注・引用トリガは無視。画像トリガは本関数を通らず、
+ * click ハンドラ先頭の別経路で処理される）。
  * @param {Event} event 委譲イベント
  * @param {string} selector トリガ判定セレクタ（term のみ／term＋脚注）
  * @param {boolean} [nested] ポップ内 term トリガを許可するか（既定 false）
@@ -406,7 +407,7 @@ function isOutsidePopover(event) {
  * 導出不可／template 不在なら null（fail-closed）。
  * @param {Document} doc 対象 document
  * @param {Element} trigger トリガ要素
- * @returns {{trigger: Element, fragment: DocumentFragment}|null}
+ * @returns {{trigger: Element, fragment: DocumentFragment, termId: string}|null}
  */
 function resolveTermContent(doc, trigger) {
   const termId = deriveTermId(trigger.getAttribute("href"));
@@ -473,7 +474,7 @@ export function resolveFootnoteContent(doc, trigger) {
  * トリガ種別（term / 脚注・引用）に応じて内容を解決する。いずれにも一致しなければ null。
  * @param {Document} doc 対象 document
  * @param {Element} trigger トリガ要素
- * @returns {{trigger: Element, fragment: DocumentFragment}|null}
+ * @returns {{trigger: Element, fragment: DocumentFragment, termId?: string}|null}
  */
 function handleTriggerForElement(doc, trigger) {
   if (trigger.matches(TERM_TRIGGER_SELECTOR)) {
@@ -735,10 +736,15 @@ export function installRiddlePopover(doc, options = {}) {
     const state = levels[level - 1];
     const popover = level === 2 ? getNestedPopover(doc) : getPopover(doc);
     // interactive=true のとき、ポップへの mouseenter で保留中の close を取り消し、
-    // ポップからの mouseleave でそのレベルの close を遅延予約する（レベル別に配線）。
+    // ポップからの mouseleave で close を遅延予約する（レベル別に配線）。
+    // レベル2からの mouseleave は close(1)（全閉）を予約する: 背景へ直接抜けた場合は
+    // 全閉が正しく、レベル1へ戻る移動ではレベル1側の mouseenter が予約を取り消すため
+    // 「ポップ間移動で閉じない」挙動はそのまま保たれる。
     if (interactive && !state.hoverWired) {
       popover.addEventListener("mouseenter", cancelTimer);
-      popover.addEventListener("mouseleave", () => scheduleClose(level));
+      popover.addEventListener("mouseleave", () =>
+        scheduleClose(level === 2 ? 1 : level),
+      );
       state.hoverWired = true;
     }
     popover.replaceChildren(result.fragment);
@@ -980,8 +986,10 @@ export function installRiddlePopover(doc, options = {}) {
   // Tab/Shift+Tab はライトボックス表示中に focus trap を適用。
   doc.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      // 内側から順に閉じる: レベル2表示中はレベル2のみ。
-      if (isNestedPopoverOpen(doc)) {
+      // 内側から順に閉じる: レベル2表示中はレベル2のみ。ただしライトボックスが
+      // 最前面に表示中は内側優先をスキップし、従来どおり全閉＋ライトボックス閉とする
+      // （v1.0.0 の「Esc はポップとライトボックスを同時に閉じる」挙動を保つ）。
+      if (isNestedPopoverOpen(doc) && !(imagePopup && isLightboxOpen(doc))) {
         closePopover(2);
       } else {
         closePopover(1);
