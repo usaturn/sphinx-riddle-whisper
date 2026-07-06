@@ -151,3 +151,104 @@ test("ネスト: レベル2は id=riddle-popover-2 の tooltip でトリガに a
   assert.equal(nested.getAttribute("role"), "tooltip");
   assert.equal(nestedTrigger.getAttribute("aria-describedby"), "riddle-popover-2");
 });
+
+/** Escape の keydown を document へ dispatch する。 */
+function pressEscape(doc) {
+  doc.dispatchEvent(
+    new doc.defaultView.KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+}
+
+/** レベル1・レベル2の両ポップを click で開き、[level1, nested] を返す。 */
+function openBothLevels(doc) {
+  const level1 = openLevel1(doc);
+  click(doc, level1.querySelector('a[href="#term-b"]'));
+  return [level1, doc.querySelector(NESTED_SELECTOR)];
+}
+
+// Esc: 1回目でレベル2のみ閉じ、2回目でレベル1も閉じる（内側から順）。
+test("閉じる: Esc は内側から順に閉じる（1回目レベル2・2回目レベル1）", () => {
+  // Arrange
+  const doc = docWithNestedTerms();
+  installRiddlePopover(doc);
+  const [level1, nested] = openBothLevels(doc);
+
+  // Act 1 & Assert: 1回目の Esc でレベル2だけ閉じる
+  pressEscape(doc);
+  assert.equal(nested.hasAttribute("hidden"), true, "1回目の Esc でレベル2は閉じる");
+  assert.equal(level1.hasAttribute("hidden"), false, "1回目の Esc でレベル1は残る");
+
+  // Act 2 & Assert: 2回目の Esc でレベル1も閉じる
+  pressEscape(doc);
+  assert.equal(level1.hasAttribute("hidden"), true, "2回目の Esc でレベル1も閉じる");
+});
+
+// 外側クリック: 両ポップの外なら全レベル閉じる。
+test("閉じる: 外側クリックでレベル1・レベル2とも閉じる", () => {
+  // Arrange
+  const doc = docWithNestedTerms();
+  installRiddlePopover(doc);
+  const [level1, nested] = openBothLevels(doc);
+
+  // Act: ポップ外（body 直下の脚注本体）を click
+  click(doc, doc.getElementById("fnbody"));
+
+  // Assert
+  assert.equal(nested.hasAttribute("hidden"), true);
+  assert.equal(level1.hasAttribute("hidden"), true);
+});
+
+// レベル1ポップ内（トリガ以外）のクリックはレベル2のみ閉じる。
+test("閉じる: レベル1ポップ内のトリガ以外クリックはレベル2のみ閉じる", () => {
+  // Arrange
+  const doc = docWithNestedTerms();
+  installRiddlePopover(doc);
+  const [level1, nested] = openBothLevels(doc);
+
+  // Act: レベル1ポップ内の p 要素（リンク外）を click
+  click(doc, level1.querySelector("p"));
+
+  // Assert
+  assert.equal(nested.hasAttribute("hidden"), true, "レベル2は閉じる");
+  assert.equal(level1.hasAttribute("hidden"), false, "レベル1は開いたまま");
+});
+
+// レベル2ポップ内（トリガ以外）のクリックでは何も閉じない。
+test("閉じる: レベル2ポップ内のクリックではどのレベルも閉じない", () => {
+  // Arrange
+  const doc = docWithNestedTerms();
+  installRiddlePopover(doc);
+  const [level1, nested] = openBothLevels(doc);
+
+  // Act
+  click(doc, nested.querySelector("p"));
+
+  // Assert
+  assert.equal(nested.hasAttribute("hidden"), false);
+  assert.equal(level1.hasAttribute("hidden"), false);
+});
+
+// レベル1を開き直すと古いレベル2は閉じ、aria-describedby も除去される。
+test("閉じる: レベル1の開き直しで古いレベル2が閉じ aria が除去される", () => {
+  // Arrange
+  const doc = docWithNestedTerms();
+  installRiddlePopover(doc);
+  const [level1, nested] = openBothLevels(doc);
+  const nestedTrigger = level1.querySelector('a[href="#term-b"]');
+
+  // Act: トップレベルの用語Aを再 click（レベル1の開き直し）
+  click(doc, doc.querySelector('a[href="#term-a"]'));
+
+  // Assert
+  assert.equal(nested.hasAttribute("hidden"), true, "古いレベル2は閉じる");
+  assert.equal(level1.hasAttribute("hidden"), false, "レベル1は表示中");
+  assert.equal(
+    nestedTrigger.hasAttribute("aria-describedby"),
+    false,
+    "閉じたレベル2の aria-describedby は除去されるべき",
+  );
+});

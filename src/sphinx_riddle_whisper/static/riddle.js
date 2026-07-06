@@ -644,6 +644,16 @@ function isLightboxOpen(doc) {
 }
 
 /**
+ * 共有レベル2ポップが表示中（存在し hidden でない）かを返す。
+ * @param {Document} doc 対象 document
+ * @returns {boolean}
+ */
+function isNestedPopoverOpen(doc) {
+  const el = doc.querySelector(POPOVER_NESTED_SELECTOR);
+  return el !== null && !el.hasAttribute("hidden");
+}
+
+/**
  * doc.defaultView の同名メソッド（setTimeout/clearTimeout 等）を view へ bind して返す。
  * defaultView 不在（fail-safe）のときは fallback を返し、TypeError で落ちないようにする。
  * @param {Document} doc 対象 document
@@ -954,9 +964,15 @@ export function installRiddlePopover(doc, options = {}) {
       return;
     }
 
-    // トリガでもポップ内でもない外側クリックなら閉じる。
+    // トリガでもポップ内でもない外側クリックなら全レベル閉じる。
     if (isOutsidePopover(event)) {
-      closePopover();
+      closePopover(1);
+      return;
+    }
+    // レベル1ポップ内（トリガ以外・レベル2の外）のクリックはレベル2のみ閉じる
+    // （内側から順の閉じ方。レベル2内のクリックでは何も閉じない）。
+    if (event.target.closest(POPOVER_NESTED_SELECTOR) === null) {
+      closePopover(2);
     }
   });
 
@@ -964,9 +980,14 @@ export function installRiddlePopover(doc, options = {}) {
   // Tab/Shift+Tab はライトボックス表示中に focus trap を適用。
   doc.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      closePopover();
-      if (imagePopup) {
-        closeLightbox();
+      // 内側から順に閉じる: レベル2表示中はレベル2のみ。
+      if (isNestedPopoverOpen(doc)) {
+        closePopover(2);
+      } else {
+        closePopover(1);
+        if (imagePopup) {
+          closeLightbox();
+        }
       }
     } else if (event.key === "Tab" && imagePopup && isLightboxOpen(doc)) {
       event.preventDefault();
