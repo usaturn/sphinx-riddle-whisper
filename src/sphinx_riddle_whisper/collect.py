@@ -69,6 +69,28 @@ def build_term_home_index_by_name(std_domain: _StandardDomainLike) -> dict[str, 
     return index
 
 
+def build_term_entry_index_by_name(
+    std_domain: _StandardDomainLike,
+) -> dict[str, tuple[str, str]]:
+    """用語名（小文字化）から (home_docname, term_id) への索引を構築する。
+
+    :func:`build_term_home_index_by_name` が home_docname だけを返すのに対し、
+    本関数は term-id（labelid）も返す。定義内 :term: 参照の推移依存記録で、
+    用語名から「home の glossary 内の definition」を term-id で引くために用いる。
+    キーの小文字化の理由は :func:`build_term_home_index_by_name` と同じ。
+
+    :param std_domain: ``objects`` 属性を持つ StandardDomain 互換オブジェクト。
+    :returns: 用語名（小文字化）をキー、``(home_docname, term_id)`` を値とする dict。
+        ``objtype`` が ``'term'`` 以外のエントリは除外する。
+    """
+    index: dict[str, tuple[str, str]] = {}
+    for (objtype, name), (docname, labelid) in std_domain.objects.items():
+        if objtype != "term":
+            continue
+        index[name.lower()] = (docname, labelid)
+    return index
+
+
 def build_term_text_index(std_domain: _StandardDomainLike) -> dict[str, str]:
     """term-id（labelid）から用語名（name）への索引を構築する。
 

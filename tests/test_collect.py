@@ -8,6 +8,7 @@ from docutils import nodes
 
 from sphinx_riddle_whisper.collect import (
     HomeDoctreeCache,
+    build_term_entry_index_by_name,
     build_term_home_index,
     extract_definitions,
 )
@@ -219,3 +220,25 @@ def test_glossaryが無いツリーでは空dictを返す():
     tree += nodes.paragraph(text="本文のみ")
 
     assert extract_definitions(tree) == {}
+
+
+def test_build_term_entry_index_by_nameは用語名小文字からhomeとterm_idの組を引く():
+    """objects の ('term', name) エントリから name.lower() → (docname, labelid) の
+    索引を構築し、term 以外の objtype は除外する。"""
+    # Arrange: term 2 件と term 以外 1 件を持つ擬似 StandardDomain
+    std = SimpleNamespace(
+        objects={
+            ("term", "Alpha"): ("glossary", "term-alpha"),
+            ("term", "delta"): ("glossary2", "term-delta"),
+            ("label", "intro"): ("index", "intro-anchor"),
+        }
+    )
+
+    # Act
+    index = build_term_entry_index_by_name(std)
+
+    # Assert: 小文字キーで (home, term-id) が引け、term 以外は含まれない
+    assert index == {
+        "alpha": ("glossary", "term-alpha"),
+        "delta": ("glossary2", "term-delta"),
+    }
