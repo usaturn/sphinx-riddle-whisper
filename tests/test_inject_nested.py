@@ -126,8 +126,10 @@ def test_riddle_nested切替後の増分ビルドでレベル2定義変更が参
     依存記録ハンドラ record_page_home_dependencies は env-updated（毎ビルド発火）で
     env.all_docs 全件を対象に、riddle_nested を実行時の config から読んで P→home
     依存を再記録する。「毎ビルド・全ページ・実行時 config」の3点が揃うことで、設定
-    切替をまたいだ増分ビルドでもレベル2 home 依存が同一ビルド内の outdated 判定に
-    間に合い、参照ページが再書き出しされる。将来ハンドラを更新 doc のみへ絞る・
+    切替をまたいでもレベル2 home 依存が記録・永続化され、続く増分ビルドの読み込み
+    フェーズの outdated 判定（env.get_outdated_files の依存 mtime チェック。その
+    ビルドの env-updated より前に走る）で参照ページが changed と判定され、
+    再読込→再書き出しされる。将来ハンドラを更新 doc のみへ絞る・
     riddle_nested を setup 時にキャッシュする等の変更をすると、この切替→増分
     シナリオで古い template が残存するため E2E で固定する(外部レビュー指摘 M-1 の
     検証過程で作成。M-1 自体は再現せず誤診断と判明し、rebuild 区分は 'html' のまま)。
@@ -211,27 +213,32 @@ def test_riddle_nested切替後の増分ビルドでレベル2定義変更が参
 def test_singlehtmlでも定義内参照termのtemplateが単一ページへ注入される(app):
     """[L-1回帰/境界] singlehtml では :term: 参照の refuri が
     '#document-<docname>#term-*' の二重フラグメント形になり、全ドキュメントが
-    単一 index.html へ集約される。この経路でも別 home の定義内参照 term（delta）の
-    template が注入されること、および本文参照（レベル1）と定義内参照（レベル2）の
-    両経路で収集される term（beta）の template が重複しないことを固定する
-    （外部レビュー指摘 L-1: ネスト注入の singlehtml 結合テスト欠落）。
+    単一 index.html へ集約される。この二重フラグメント形からの term-id 抽出経路でも
+    別 home（glossary2）の term（delta）の template が注入されること、および複数
+    ページ・複数経路から収集される term（beta）の template が単一ページ上で重複
+    しないことを固定する（外部レビュー指摘 L-1: singlehtml 結合テスト欠落）。
+
+    なお singlehtml では全 glossary の定義が本文として単一ページへ集約されるため、
+    定義内参照（レベル2）は組み立て済み doctree 上でレベル1参照と区別できず、本
+    テストはネスト収集経路そのものは固定しない（riddle_nested の値に依らず同じ
+    結果になる）。固定対象は二重フラグメント refuri の処理と dedup である。
     """
     # Arrange & Act: testroot='nested' を singlehtml で実ビルドする
     app.build()
     html = (Path(app.outdir) / "index.html").read_text(encoding="utf-8")
 
-    # Assert: 別 home（glossary2）の定義内参照 term（delta）の template が
-    # 単一 index.html へ注入されている
+    # Assert: 別 home（glossary2）の term（delta）の template が単一 index.html へ
+    # 注入されている
     assert '<template id="riddle-tip--term-delta">' in html, (
-        "singlehtml で別 home の定義内参照 term（delta）の template が単一 "
-        "index.html へ注入されていない（二重フラグメント形の term-id 抽出が"
-        "ネスト収集経路で壊れた疑い）"
+        "singlehtml で別 home（glossary2）の term（delta）の template が単一 "
+        "index.html へ注入されていない（二重フラグメント形 refuri からの "
+        "term-id 抽出が壊れた疑い）"
     )
-    # Assert: 本文参照と定義内参照の両経路から収集される beta の template が
-    # ちょうど1回だけ存在する（dedup の結合検証）
+    # Assert: 複数ページ・複数経路から収集される beta の template がちょうど1回
+    # だけ存在する（dedup の結合検証）
     beta_count = html.count('id="riddle-tip--term-beta"')
     assert beta_count == 1, (
-        "singlehtml で本文参照（レベル1）と定義内参照（レベル2）の両経路から"
-        f"収集される term-beta の template がちょうど1回でない（実際: {beta_count} 回）"
-        "。二重注入または注入消失が起きている。"
+        "singlehtml で複数ページ・複数経路から収集される term-beta の template が"
+        f"ちょうど1回でない（実際: {beta_count} 回）。二重注入または注入消失が"
+        "起きている。"
     )
