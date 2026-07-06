@@ -16,3 +16,10 @@ Sphinx 拡張 ``sphinx-riddle-whisper`` のドキュメント兼デモ。
 .. image:: _static/sample.png
    :alt: サンプル画像
    :target: _static/sample.png
+
+ネストポップアップのデモ
+========================
+
+:term:`popover` のポップアップ内にある :term:`glossary` などの ``:term:``
+リンクにホバー / クリックすると、2段目のポップアップが重ねて表示されます
+（固定2段）。

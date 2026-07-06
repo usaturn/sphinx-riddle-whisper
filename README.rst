@@ -43,6 +43,8 @@ Features
   at build time and re-checked in the browser as a second line of defense.
 - **Incremental build aware** — pages that reference a term are rebuilt when the
   term's home definition changes.
+- **Nested popovers** — a ``:term:`` link inside a popover opens a second-level
+  popover (capped at two levels, configurable).
 
 Requirements
 ============
@@ -151,6 +153,10 @@ defaults are:
      - bool
      - ``True``
      - Enable the image lightbox.
+   * - ``riddle_nested``
+     - bool
+     - ``True``
+     - Open a second, nested popover from ``:term:`` links inside a popover.
 
 Example showing the defaults:
 
@@ -165,6 +171,7 @@ Example showing the defaults:
    riddle_include_term_title = True
    riddle_footnotes = True
    riddle_image_popup = True
+   riddle_nested = True
 
 Footnotes, Citations & Image Lightbox
 =====================================
@@ -178,6 +185,18 @@ focus-trapped, scroll-locked lightbox. Only safe image URLs (recognized image
 extensions over allowed schemes) are opened.
 
 Set either option to ``False`` to disable that feature.
+
+Nested Popovers
+===============
+
+With ``riddle_nested = True`` (the default), a ``:term:`` link inside an open
+popover opens a second, nested popover on top of the first, so definitions that
+reference other terms can be explored without leaving the page. Nesting is
+capped at two levels — ``:term:`` links inside the second popover behave as
+normal links — and a link pointing to the term already shown in the first
+popover does not open a duplicate. Press Esc to close the inner popover first,
+then the outer one. Set the option to ``False`` to keep popover-internal
+``:term:`` links inert.
 
 Security
 ========

@@ -35,6 +35,7 @@ from sphinx.environment import BuildEnvironment
 from sphinx_riddle_whisper.collect import (
     HomeDoctreeCache,
     _EnvLike,
+    build_term_entry_index_by_name,
     build_term_home_index,
     build_term_home_index_by_name,
     build_term_text_index,
@@ -79,6 +80,13 @@ def record_page_home_dependencies(app: Sphinx, env: BuildEnvironment) -> None:
     env データ蓄積ではない。よって ``env_version`` / ``env-merge-info`` / ``env-purge-doc``
     の自前実装は不要のまま（#23 env_version 要否ゲート）。
 
+    **レベル2の推移依存も記録する**: ``riddle_nested`` が有効なとき、ページ P が参照する
+    各レベル1 term の定義内から参照される term（レベル2）の home ソースも P の依存へ
+    加える（1段だけの推移。レベル2 term の定義内参照までは辿らない）。これは
+    :func:`inject_definition_templates` が同条件でレベル2 template を注入すること
+    （固定2段）に対応する依存記録であり、home 側の定義や別 home の定義だけを変更した
+    増分ビルドでも P が正しく再書き出しされるようにするためである。
+
     :param app: Sphinx アプリケーション。
     :param env: ビルド環境（``env-updated`` から渡される。``app.env`` と同一）。
     """
@@ -89,6 +97,18 @@ def record_page_home_dependencies(app: Sphinx, env: BuildEnvironment) -> None:
     if not home_by_name:
         return
 
+    # 推移依存（レベル2）用: 用語名 → (home, term-id) と、home ごとの definition の
+    # メモ化。unresolved doctree の glossary は parse 時構造なので extract_definitions
+    # がそのまま使える(フル解決しない理由は上記 docstring のとおり)。
+    nested_enabled = app.config.riddle_nested
+    entry_by_name = build_term_entry_index_by_name(std)
+    defs_by_home: dict[str, dict[str, nodes.definition]] = {}
+
+    def definitions_of(home: str) -> dict[str, nodes.definition]:
+        if home not in defs_by_home:
+            defs_by_home[home] = extract_definitions(env.get_doctree(home))
+        return defs_by_home[home]
+
     for pagename in env.all_docs:
         # 未解決 doctree を読む（pickle ロードのみ・post-transform なし）。
         page_doctree = env.get_doctree(pagename)
@@ -98,6 +118,21 @@ def record_page_home_dependencies(app: Sphinx, env: BuildEnvironment) -> None:
             for name in term_names
             if name.lower() in home_by_name
         }
+        # レベル2: 各レベル1 term の定義内 :term: 参照の home も依存へ加える
+        # （1段だけの推移。深さ3以降の template は注入しないため辿らない）。
+        if nested_enabled:
+            for name in term_names:
+                entry = entry_by_name.get(name.lower())
+                if entry is None:
+                    continue
+                home, term_id = entry
+                definition = definitions_of(home).get(term_id)
+                if definition is None:
+                    continue
+                for nested_name in extract_referenced_term_names(definition):
+                    nested_entry = entry_by_name.get(nested_name.lower())
+                    if nested_entry is not None:
+                        homes.add(nested_entry[0])
         for home in homes:
             if home == pagename:
                 continue
@@ -219,6 +254,29 @@ def inject_definition_templates(
     cache = HomeDoctreeCache(cast(_EnvLike, app.env), app.builder)
     defs_by_home: dict[str, dict[str, nodes.definition]] = {}
 
+    def get_definition(term_id: str) -> nodes.definition | None:
+        """term_id の definition（deepcopy 済み）を home 単位のメモ化付きで返す。"""
+        home = home_index[term_id]
+        if home not in defs_by_home:
+            defs_by_home[home] = extract_definitions(cache.get(home))
+        return defs_by_home[home].get(term_id)
+
+    # フェーズ1（発見）: riddle_nested 有効時、レベル1定義内の :term: 参照
+    # （レベル2）を追加収集する。固定2段のためレベル2定義内の参照は収集しない。
+    # 発見は rebase による definition の破壊的変更前に行う（フェーズ分離で保証）。
+    if app.config.riddle_nested:
+        nested_ids: list[str] = []
+        for term_id in term_ids:
+            definition = get_definition(term_id)
+            if definition is None:
+                continue
+            nested_ids.extend(extract_referenced_term_ids(definition))
+        term_ids = list(
+            dict.fromkeys(
+                [*term_ids, *(tid for tid in nested_ids if tid in home_index)]
+            )
+        )
+
     allowed_tags = _as_set(app.config.riddle_allowed_tags)
     allowed_schemes = _as_set(app.config.riddle_allowed_schemes)
     allowed_attributes = app.config.riddle_allowed_attributes
@@ -228,9 +286,7 @@ def inject_definition_templates(
         home = home_index[term_id]
         # P→home の依存記録は record_page_home_dependencies が親プロセスで一括済み
         # （並列書き出しでワーカー側 note_dependency が失われる問題を回避）。
-        if home not in defs_by_home:
-            defs_by_home[home] = extract_definitions(cache.get(home))
-        definition = defs_by_home[home].get(term_id)
+        definition = get_definition(term_id)
         if definition is None:
             continue
 

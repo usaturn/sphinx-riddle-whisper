@@ -348,21 +348,42 @@ const POPOVER_SELECTOR = `.${POPOVER_CLASS}`;
 // 共有ポップの id（aria-describedby の参照先）。id 未設定のとき付与する。
 const POPOVER_ID = "riddle-popover";
 
+// DOM 契約: レベル2（ネスト）ポップの class 名・セレクタ・id。
+// レベル2は riddle-popover と riddle-popover--nested の両 class を持つ。
+const POPOVER_NESTED_CLASS = "riddle-popover--nested";
+const POPOVER_NESTED_SELECTOR = `.${POPOVER_NESTED_CLASS}`;
+const POPOVER_NESTED_ID = "riddle-popover-2";
+// レベル1ポップだけを引くセレクタ。
+const POPOVER_LEVEL1_SELECTOR = `.${POPOVER_CLASS}:not(${POPOVER_NESTED_SELECTOR})`;
+
 /**
  * 委譲イベントの target から、指定セレクタに最も近いトリガリンクを取り出す。
- * トリガでなければ null（fail-closed）。
+ * トリガでなければ null（fail-closed）。ネスト規則:
+ * レベル2ポップ配下は常に無視（固定2段）、レベル1ポップ配下は nested 有効かつ
+ * term トリガのみ許可（脚注・引用トリガは無視。画像トリガは本関数を通らず、
+ * click ハンドラ先頭の別経路で処理される）。
  * @param {Event} event 委譲イベント
  * @param {string} selector トリガ判定セレクタ（term のみ／term＋脚注）
+ * @param {boolean} [nested] ポップ内 term トリガを許可するか（既定 false）
  * @returns {Element|null} トリガ要素、該当しなければ null
  */
-function findTriggerFromEvent(event, selector) {
+function findTriggerFromEvent(event, selector, nested = false) {
   const trigger = event.target.closest(selector);
-  // 再帰防止: ポップ配下のトリガは無視する（ポップ内リンクで別 term が再帰的に開かない）。
-  if (trigger !== null && trigger.closest(POPOVER_SELECTOR) !== null) {
+  if (trigger === null) {
+    return null;
+  }
+  // 固定2段: レベル2ポップ配下のトリガは常に無視する。
+  if (trigger.closest(POPOVER_NESTED_SELECTOR) !== null) {
+    return null;
+  }
+  // レベル1ポップ配下は nested 有効かつ term トリガのみ許可する。
+  if (
+    trigger.closest(POPOVER_SELECTOR) !== null &&
+    (!nested || !trigger.matches(TERM_TRIGGER_SELECTOR))
+  ) {
     return null;
   }
   if (
-    trigger !== null &&
     trigger.matches(TERM_TRIGGER_SELECTOR) &&
     deriveTermId(trigger.getAttribute("href")) === null
   ) {
@@ -386,7 +407,7 @@ function isOutsidePopover(event) {
  * 導出不可／template 不在なら null（fail-closed）。
  * @param {Document} doc 対象 document
  * @param {Element} trigger トリガ要素
- * @returns {{trigger: Element, fragment: DocumentFragment}|null}
+ * @returns {{trigger: Element, fragment: DocumentFragment, termId: string}|null}
  */
 function resolveTermContent(doc, trigger) {
   const termId = deriveTermId(trigger.getAttribute("href"));
@@ -397,7 +418,11 @@ function resolveTermContent(doc, trigger) {
   if (template === null) {
     return null;
   }
-  return { trigger, fragment: sanitizeFragment(template.content.cloneNode(true)) };
+  return {
+    trigger,
+    fragment: sanitizeFragment(template.content.cloneNode(true)),
+    termId,
+  };
 }
 
 // DOM 契約: 脚注/引用本体は <aside class="footnote"|"citation" id="…"> として同一ページに存在する。
@@ -449,7 +474,7 @@ export function resolveFootnoteContent(doc, trigger) {
  * トリガ種別（term / 脚注・引用）に応じて内容を解決する。いずれにも一致しなければ null。
  * @param {Document} doc 対象 document
  * @param {Element} trigger トリガ要素
- * @returns {{trigger: Element, fragment: DocumentFragment}|null}
+ * @returns {{trigger: Element, fragment: DocumentFragment, termId?: string}|null}
  */
 function handleTriggerForElement(doc, trigger) {
   if (trigger.matches(TERM_TRIGGER_SELECTOR)) {
@@ -543,9 +568,37 @@ function getLazyElement(doc, className, selector, initFn) {
  * @returns {Element} 共有 .riddle-popover 要素
  */
 function getPopover(doc) {
-  return getLazyElement(doc, POPOVER_CLASS, POPOVER_SELECTOR, (el) => {
+  return getLazyElement(doc, POPOVER_CLASS, POPOVER_LEVEL1_SELECTOR, (el) => {
     el.setAttribute("hidden", "");
   });
+}
+
+/**
+ * 共有レベル2ポップ（単一要素）を取得する。無ければ生成して body に append する。
+ * レベル1要素より後に append されるため、等しい z-index でも DOM 順で上に描画される
+ * （レベル1の z-index は int32 最大値で「より大きい値」は置けない）。
+ * @param {Document} doc 対象 document
+ * @returns {Element} 共有レベル2ポップ要素
+ */
+function getNestedPopover(doc) {
+  return getLazyElement(
+    doc,
+    `${POPOVER_CLASS} ${POPOVER_NESTED_CLASS}`,
+    POPOVER_NESTED_SELECTOR,
+    (el) => {
+      el.setAttribute("hidden", "");
+    },
+  );
+}
+
+/**
+ * トリガの属するポップレベルを返す（ポップ外 = 1、レベル1ポップ内 = 2）。
+ * レベル2ポップ内のトリガは findTriggerFromEvent が先に弾くため到達しない。
+ * @param {Element} trigger トリガ要素
+ * @returns {number} 1 または 2
+ */
+function levelOfTrigger(trigger) {
+  return trigger.closest(POPOVER_SELECTOR) !== null ? 2 : 1;
 }
 
 // DOM 契約: 画像ライトボックスの class 名とセレクタ。
@@ -592,6 +645,16 @@ function isLightboxOpen(doc) {
 }
 
 /**
+ * 共有レベル2ポップが表示中（存在し hidden でない）かを返す。
+ * @param {Document} doc 対象 document
+ * @returns {boolean}
+ */
+function isNestedPopoverOpen(doc) {
+  const el = doc.querySelector(POPOVER_NESTED_SELECTOR);
+  return el !== null && !el.hasAttribute("hidden");
+}
+
+/**
  * doc.defaultView の同名メソッド（setTimeout/clearTimeout 等）を view へ bind して返す。
  * defaultView 不在（fail-safe）のときは fallback を返し、TypeError で落ちないようにする。
  * @param {Document} doc 対象 document
@@ -626,6 +689,7 @@ export function installRiddlePopover(doc, options = {}) {
     interactive = true,
     footnotes = true,
     imagePopup = false,
+    nested = true,
     setTimeout: setTimer = resolveViewTimer(doc, "setTimeout", () => null),
     clearTimeout: clearTimer = resolveViewTimer(doc, "clearTimeout", () => {}),
   } = options;
@@ -635,16 +699,18 @@ export function installRiddlePopover(doc, options = {}) {
     ? `${TERM_TRIGGER_SELECTOR}, ${FOOTNOTE_TRIGGER_SELECTOR}`
     : TERM_TRIGGER_SELECTOR;
 
-  // 表示中の scroll/resize 追従リスナの解除関数（多重登録・リークを避ける）。
-  let detachReposition = null;
   // open/close 遅延を管理する単一のタイマー id（保留中でなければ null）。
   let pendingTimer = null;
-  // interactive 用の popover ホバーリスナを多重登録しないためのフラグ。
-  let popoverHoverWired = false;
-  // 現在開いている popover のトリガ要素（閉じる時の aria-describedby 除去・focus 復帰用）。
-  let activeTrigger = null;
-  // 開いた起点が focus 系（focusin/blur 経路）か（閉じる時に focus を戻すかの判定）。
-  let openedByFocus = false;
+  // レベル別状態（[0] = レベル1、[1] = レベル2）。
+  // activeTrigger: 開いているポップのトリガ（aria 除去・focus 復帰用）。
+  // openedByFocus: focus 起点で開いたか（閉じる時に focus を戻すかの判定）。
+  // detachReposition: scroll/resize 追従リスナの解除関数。
+  // termId: 表示中の term-id（同一 term 抑止用。脚注表示中は null）。
+  // hoverWired: interactive 用ポップホバーリスナの多重登録防止フラグ。
+  const levels = [
+    { activeTrigger: null, openedByFocus: false, detachReposition: null, termId: null, hoverWired: false },
+    { activeTrigger: null, openedByFocus: false, detachReposition: null, termId: null, hoverWired: false },
+  ];
   // 現在開いている画像ライトボックスの起点トリガ（閉じる時の focus 復帰用）。
   let activeImageTrigger = null;
   // openLightbox で inert + aria-hidden を付与した body 直下要素の記録（closeLightbox で解除）。
@@ -653,32 +719,50 @@ export function installRiddlePopover(doc, options = {}) {
   let savedOverflow = null;
 
   function openFromTrigger(triggerEl, fromFocus = false) {
+    const level = levelOfTrigger(triggerEl);
     const result = handleTriggerForElement(doc, triggerEl);
     if (result === null) {
       return;
     }
-    const popover = getPopover(doc);
-    // interactive=true のとき、popover への mouseenter で保留中の close を取り消し、
-    // popover からの mouseleave で改めて close を遅延予約する（ポップ内に入れば閉じない）。
-    if (interactive && !popoverHoverWired) {
+    const termId = result.termId ?? null;
+    // 同一 term 抑止: レベル1表示中の term と同じならレベル2は開かない。
+    if (level === 2 && termId !== null && termId === levels[0].termId) {
+      return;
+    }
+    // レベル1を開き直すときは古いレベル2を閉じる（内容不整合を残さない）。
+    if (level === 1) {
+      closePopover(2);
+    }
+    const state = levels[level - 1];
+    const popover = level === 2 ? getNestedPopover(doc) : getPopover(doc);
+    // interactive=true のとき、ポップへの mouseenter で保留中の close を取り消し、
+    // ポップからの mouseleave で close を遅延予約する（レベル別に配線）。
+    // レベル2からの mouseleave は close(1)（全閉）を予約する: 背景へ直接抜けた場合は
+    // 全閉が正しく、レベル1へ戻る移動ではレベル1側の mouseenter が予約を取り消すため
+    // 「ポップ間移動で閉じない」挙動はそのまま保たれる。
+    if (interactive && !state.hoverWired) {
       popover.addEventListener("mouseenter", cancelTimer);
-      popover.addEventListener("mouseleave", scheduleClose);
-      popoverHoverWired = true;
+      popover.addEventListener("mouseleave", () =>
+        scheduleClose(level === 2 ? 1 : level),
+      );
+      state.hoverWired = true;
     }
     popover.replaceChildren(result.fragment);
     // a11y: 開く時に role='tooltip' を付与し、参照用の id を確保して、
-    // トリガへ aria-describedby=popover.id を設定する（共有ポップに id を与える）。
+    // トリガへ aria-describedby=popover.id を設定する（レベル別 id）。
     popover.setAttribute("role", "tooltip");
-    // id 未設定（null）または空文字なら既定 id を与えてから参照する。
-    const popoverId = popover.getAttribute("id") || POPOVER_ID;
+    const popoverId =
+      popover.getAttribute("id") ||
+      (level === 2 ? POPOVER_NESTED_ID : POPOVER_ID);
     popover.setAttribute("id", popoverId);
-    if (activeTrigger !== null && activeTrigger !== result.trigger) {
-      activeTrigger.removeAttribute("aria-describedby");
+    if (state.activeTrigger !== null && state.activeTrigger !== result.trigger) {
+      state.activeTrigger.removeAttribute("aria-describedby");
     }
     result.trigger.setAttribute("aria-describedby", popoverId);
     // 閉じる時の aria-describedby 除去・focus 復帰のため、起点とトリガを記録する。
-    activeTrigger = result.trigger;
-    openedByFocus = fromFocus;
+    state.activeTrigger = result.trigger;
+    state.openedByFocus = fromFocus;
+    state.termId = termId;
     popover.removeAttribute("hidden");
     // 配置で例外が起きても握り潰し、配置だけスキップして表示の後続
     // （追従リスナ登録）まで継続する（fail-safe）。
@@ -689,31 +773,41 @@ export function installRiddlePopover(doc, options = {}) {
     }
 
     // 既存の追従リスナがあれば解除してから張り直す（多重登録回避）。
-    if (detachReposition !== null) {
-      detachReposition();
+    if (state.detachReposition !== null) {
+      state.detachReposition();
     }
-    detachReposition = attachRepositionListeners(doc, result.trigger, popover);
+    state.detachReposition = attachRepositionListeners(doc, result.trigger, popover);
   }
 
-  function closePopover() {
-    const popover = doc.querySelector(POPOVER_SELECTOR);
-    if (popover !== null) {
-      popover.setAttribute("hidden", "");
-    }
-    if (detachReposition !== null) {
-      detachReposition();
-      detachReposition = null;
-    }
-    // a11y: 閉じる時に aria-describedby を除去し、focus 起点で開いていた場合のみ
-    // トリガ要素へ focus を戻す（hover 起点では戻さない）。
-    if (activeTrigger !== null) {
-      const triggerToRestore = activeTrigger;
-      const wasFocusOpen = openedByFocus;
-      activeTrigger = null;
-      openedByFocus = false;
-      triggerToRestore.removeAttribute("aria-describedby");
-      if (wasFocusOpen && typeof triggerToRestore.focus === "function") {
-        triggerToRestore.focus();
+  /**
+   * 指定レベルとそれより深いレベルを連鎖で閉じる（既定はレベル1＝全部）。
+   * aria-describedby 除去・focus 復帰・追従リスナ解除もレベルごとに行う。
+   * @param {number} [level] 閉じ始めるレベル（1 または 2。既定 1）
+   */
+  function closePopover(level = 1) {
+    for (let l = levels.length; l >= level; l--) {
+      const selector = l === 2 ? POPOVER_NESTED_SELECTOR : POPOVER_LEVEL1_SELECTOR;
+      const popover = doc.querySelector(selector);
+      if (popover !== null) {
+        popover.setAttribute("hidden", "");
+      }
+      const state = levels[l - 1];
+      if (state.detachReposition !== null) {
+        state.detachReposition();
+        state.detachReposition = null;
+      }
+      state.termId = null;
+      // a11y: 閉じる時に aria-describedby を除去し、focus 起点で開いていた場合のみ
+      // トリガ要素へ focus を戻す（hover 起点では戻さない）。
+      if (state.activeTrigger !== null) {
+        const triggerToRestore = state.activeTrigger;
+        const wasFocusOpen = state.openedByFocus;
+        state.activeTrigger = null;
+        state.openedByFocus = false;
+        triggerToRestore.removeAttribute("aria-describedby");
+        if (wasFocusOpen && typeof triggerToRestore.focus === "function") {
+          triggerToRestore.focus();
+        }
       }
     }
   }
@@ -819,8 +913,11 @@ export function installRiddlePopover(doc, options = {}) {
     scheduleTimer(() => openFromTrigger(triggerEl, fromFocus), openDelayMs);
   }
 
-  function scheduleClose() {
-    scheduleTimer(closePopover, closeDelayMs);
+  // 閉じる遅延予約。level が 2 以外（未指定・イベントオブジェクト等）は 1 に倒す
+  // （fail-closed。既存のリスナ直渡し呼び出しを壊さない）。
+  function scheduleClose(level) {
+    const lvl = level === 2 ? 2 : 1;
+    scheduleTimer(() => closePopover(lvl), closeDelayMs);
   }
 
   // 委譲リスナ共通形: event からトリガを取り出し、トリガなら handle(triggerEl) を呼ぶ。
@@ -829,7 +926,7 @@ export function installRiddlePopover(doc, options = {}) {
     doc.addEventListener(
       type,
       (event) => {
-        const triggerEl = findTriggerFromEvent(event, triggerSelector);
+        const triggerEl = findTriggerFromEvent(event, triggerSelector, nested);
         if (triggerEl !== null) {
           handle(triggerEl);
         }
@@ -865,7 +962,7 @@ export function installRiddlePopover(doc, options = {}) {
     }
 
     // 脚注・用語トリガ。
-    const triggerEl = findTriggerFromEvent(event, triggerSelector);
+    const triggerEl = findTriggerFromEvent(event, triggerSelector, nested);
     if (triggerEl !== null) {
       if (openOnClick) {
         openFromTrigger(triggerEl);
@@ -873,9 +970,15 @@ export function installRiddlePopover(doc, options = {}) {
       return;
     }
 
-    // トリガでもポップ内でもない外側クリックなら閉じる。
+    // トリガでもポップ内でもない外側クリックなら全レベル閉じる。
     if (isOutsidePopover(event)) {
-      closePopover();
+      closePopover(1);
+      return;
+    }
+    // レベル1ポップ内（トリガ以外・レベル2の外）のクリックはレベル2のみ閉じる
+    // （内側から順の閉じ方。レベル2内のクリックでは何も閉じない）。
+    if (event.target.closest(POPOVER_NESTED_SELECTOR) === null) {
+      closePopover(2);
     }
   });
 
@@ -883,9 +986,16 @@ export function installRiddlePopover(doc, options = {}) {
   // Tab/Shift+Tab はライトボックス表示中に focus trap を適用。
   doc.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
-      closePopover();
-      if (imagePopup) {
-        closeLightbox();
+      // 内側から順に閉じる: レベル2表示中はレベル2のみ。ただしライトボックスが
+      // 最前面に表示中は内側優先をスキップし、従来どおり全閉＋ライトボックス閉とする
+      // （v1.0.0 の「Esc はポップとライトボックスを同時に閉じる」挙動を保つ）。
+      if (isNestedPopoverOpen(doc) && !(imagePopup && isLightboxOpen(doc))) {
+        closePopover(2);
+      } else {
+        closePopover(1);
+        if (imagePopup) {
+          closeLightbox();
+        }
       }
     } else if (event.key === "Tab" && imagePopup && isLightboxOpen(doc)) {
       event.preventDefault();
@@ -903,14 +1013,23 @@ export function installRiddlePopover(doc, options = {}) {
   if (openOnHover) {
     // mouseenter/blur は bubbles:false のため capture フェーズの委譲で拾う。
     // focusin/blur でも mouseenter/mouseleave と同一の開閉遷移を行う。
+    // close はトリガの属するレベルだけを閉じる（ポップ内トリガ → レベル2のみ）。
     addTriggerListener("mouseenter", scheduleOpen, true);
-    addTriggerListener("mouseleave", scheduleClose, true);
+    addTriggerListener(
+      "mouseleave",
+      (triggerEl) => scheduleClose(levelOfTrigger(triggerEl)),
+      true,
+    );
     addTriggerListener(
       "focusin",
       (triggerEl) => scheduleOpen(triggerEl, true),
       true,
     );
-    addTriggerListener("blur", scheduleClose, true);
+    addTriggerListener(
+      "blur",
+      (triggerEl) => scheduleClose(levelOfTrigger(triggerEl)),
+      true,
+    );
   }
 }
 
@@ -928,6 +1047,7 @@ const CONFIG_DEFAULTS = Object.freeze({
   maxWidth: "32rem",
   footnotes: true,
   imagePopup: true,
+  nested: true,
 });
 
 // trigger に許可される値（これ以外は既定へ正規化する）。
@@ -969,7 +1089,7 @@ function normalizeString(value, fallback) {
  * 既定値へ fallback する（fail-closed）。各フィールドも個別に再正規化する（多層防御。
  * Python 側 validate_config の二重化）。
  * @param {Document} doc 対象 document
- * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string}}
+ * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string, footnotes:boolean, imagePopup:boolean, nested:boolean}}
  */
 export function readRiddleConfig(doc) {
   const el = doc.getElementById(RIDDLE_CONFIG_ID);
@@ -1006,6 +1126,7 @@ export function readRiddleConfig(doc) {
     maxWidth: normalizeString(raw.maxWidth, CONFIG_DEFAULTS.maxWidth),
     footnotes: normalizeBoolean(raw.footnotes, CONFIG_DEFAULTS.footnotes),
     imagePopup: normalizeBoolean(raw.imagePopup, CONFIG_DEFAULTS.imagePopup),
+    nested: normalizeBoolean(raw.nested, CONFIG_DEFAULTS.nested),
   };
 }
 
