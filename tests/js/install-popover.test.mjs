@@ -1351,10 +1351,11 @@ for (const { trigger, eventType, shouldOpen } of triggerGateCases) {
   });
 }
 
-// セキュリティ（t5・再帰防止・テーブル駆動）: 共有 .riddle-popover の配下に置かれた
-// トリガリンク（a[href*='#term-']）への click / hover では、別 term のポップを
-// 新規に開かない（委譲リスナで event.target が .riddle-popover 配下なら無視する）。
-// これにより、ポップ内リンク経由で別定義が再帰的に開く事故を防ぐ。
+// セキュリティ（t5・再帰防止・テーブル駆動）: nested: false（v1.0.0 相当）では、
+// 共有 .riddle-popover 配下のトリガリンク（a[href*='#term-']）は click / hover とも
+// 常に不活性で、別 term のポップを新規に開かない（委譲リスナで event.target が
+// .riddle-popover 配下なら無視する）。nested 有効（既定）時のポップ内 term 挙動
+// （レベル2ネスト表示）は tests/js/nested-popover.test.mjs が検証する。
 //
 // 観測方法: 共有 .riddle-popover を「閉じた状態（hidden）」で先に用意し、その配下へ
 // term-1 を指すリンクを置く。本文側トリガ（term-0）には触れず、ポップ内リンクへ
@@ -1366,7 +1367,7 @@ const recursionGuardCases = [
 ];
 
 for (const { eventType, bubbles } of recursionGuardCases) {
-  test(`再帰防止: .riddle-popover 配下のトリガリンクへの ${eventType} では新規に開かない`, () => {
+  test(`再帰防止(nested無効): .riddle-popover 配下のトリガリンクへの ${eventType} では新規に開かない`, () => {
     // Arrange: 本文トリガ（term-0）と定義 template に加え、共有 .riddle-popover を
     // 「閉じた状態（hidden）」で用意し、その配下に term-1 を指すリンクを置く。
     const dom = new JSDOM(
@@ -1385,6 +1386,7 @@ for (const { eventType, bubbles } of recursionGuardCases) {
       trigger: "both",
       openDelayMs: 150,
       closeDelayMs: 100,
+      nested: false,
       setTimeout: timers.setTimeout,
       clearTimeout: timers.clearTimeout,
     });
