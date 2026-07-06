@@ -114,3 +114,89 @@ def test_riddle_nested無効時は定義内参照の依存が記録されない(
 
     assert str(app.env.doc2path("glossary")) in deps  # レベル1依存は従来どおり
     assert str(app.env.doc2path("glossary2")) not in deps
+
+
+def test_riddle_nested切替後の増分ビルドでレベル2定義変更が参照ページへ反映される(
+    make_app, sphinx_test_tempdir, rootdir
+):
+    """[切替増分回帰/境界] riddle_nested=False で一度ビルドした環境を True へ切り替えた後、
+    レベル2 term の home（glossary2.rst）だけを変更した増分ビルドで、参照ページ
+    both.html の term-delta template 本文が最新へ置換され旧本文が残らない。
+
+    依存記録ハンドラ record_page_home_dependencies は env-updated（毎ビルド発火）で
+    env.all_docs 全件を対象に、riddle_nested を実行時の config から読んで P→home
+    依存を再記録する。「毎ビルド・全ページ・実行時 config」の3点が揃うことで、設定
+    切替をまたいだ増分ビルドでもレベル2 home 依存が同一ビルド内の outdated 判定に
+    間に合い、参照ページが再書き出しされる。将来ハンドラを更新 doc のみへ絞る・
+    riddle_nested を setup 時にキャッシュする等の変更をすると、この切替→増分
+    シナリオで古い template が残存するため E2E で固定する(外部レビュー指摘 M-1 の
+    検証過程で作成。M-1 自体は再現せず誤診断と判明し、rebuild 区分は 'html' のまま)。
+    """
+    import shutil
+
+    # Arrange: testroot 'nested' を一意な srcdir へコピーし、riddle_nested=False で
+    # 初回ビルドする（make_app は app fixture と違い testroot コピーをしないため
+    # 自前でコピーする）。
+    src = sphinx_test_tempdir / "nested-toggle-incremental"
+    if not src.exists():
+        shutil.copytree(rootdir / "test-nested", src)
+    app_disabled = make_app(
+        "html",
+        srcdir=src,
+        warningiserror=True,
+        confoverrides={"riddle_nested": False},
+    )
+    app_disabled.build()
+
+    out_both = Path(app_disabled.outdir) / "both.html"
+    assert "riddle-tip--term-delta" not in out_both.read_text(encoding="utf-8"), (
+        "前提崩れ: riddle_nested=False の初回ビルドで both.html にレベル2 "
+        "template（term-delta）が注入されている"
+    )
+
+    # Act(切替): 同じ srcdir（= 同じ outdir/doctreedir・env pickle 引き継ぎ）で
+    # riddle_nested=True へ切り替えて再ビルドする。
+    app_enabled = make_app(
+        "html",
+        srcdir=src,
+        warningiserror=True,
+        confoverrides={"riddle_nested": True},
+    )
+    app_enabled.build()
+
+    html_after_toggle = out_both.read_text(encoding="utf-8")
+    assert '<template id="riddle-tip--term-delta">' in html_after_toggle, (
+        "前提崩れ: True へ切替後の both.html に term-delta template が無い"
+    )
+    assert "delta の定義本体。" in html_after_toggle, (
+        "前提崩れ: 切替後の term-delta template に初期定義本文が無い"
+    )
+
+    # Act(増分): レベル2 term の home である glossary2.rst の delta 定義本文だけを
+    # 書き換えて増分ビルドする。参照ページ both.rst には一切手を触れない
+    # （切替後増分の本丸）。
+    glossary2_src = src / "glossary2.rst"
+    text = glossary2_src.read_text(encoding="utf-8")
+    new_body = "delta の更新後定義。切替増分の検証用。"
+    text = text.replace("delta の定義本体。", new_body)
+    assert new_body in text, (
+        "前提崩れ: glossary2.rst の delta 定義本文を置換できなかった"
+    )
+    glossary2_src.write_text(text, encoding="utf-8")
+
+    app_enabled.build()
+
+    # Assert: both.html の term-delta template 本文が最新へ置換され、旧本文が
+    # 残っていない（切替後の増分でレベル2依存が効いていること）。
+    html_second = out_both.read_text(encoding="utf-8")
+    start = html_second.index('<template id="riddle-tip--term-delta">')
+    template = html_second[start : html_second.index("</template>", start)]
+    assert new_body in template, (
+        "riddle_nested=False→True 切替後の増分ビルドで、both.html の term-delta "
+        f"template に最新定義本文 {new_body!r} が反映されていない（増分ビルドの "
+        "env-updated でレベル2 home 依存が再記録されず both が再書き出しされなかった疑い）"
+    )
+    assert "delta の定義本体。" not in template, (
+        "riddle_nested=False→True 切替後の増分ビルドで、both.html の term-delta "
+        "template に古い定義本文が残存している（切替後の増分でレベル2依存が効いていない）"
+    )
