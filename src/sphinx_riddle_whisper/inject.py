@@ -219,6 +219,29 @@ def inject_definition_templates(
     cache = HomeDoctreeCache(cast(_EnvLike, app.env), app.builder)
     defs_by_home: dict[str, dict[str, nodes.definition]] = {}
 
+    def get_definition(term_id: str) -> nodes.definition | None:
+        """term_id の definition（deepcopy 済み）を home 単位のメモ化付きで返す。"""
+        home = home_index[term_id]
+        if home not in defs_by_home:
+            defs_by_home[home] = extract_definitions(cache.get(home))
+        return defs_by_home[home].get(term_id)
+
+    # フェーズ1（発見）: riddle_nested 有効時、レベル1定義内の :term: 参照
+    # （レベル2）を追加収集する。固定2段のためレベル2定義内の参照は収集しない。
+    # 発見は rebase による definition の破壊的変更前に行う（フェーズ分離で保証）。
+    if app.config.riddle_nested:
+        nested_ids: list[str] = []
+        for term_id in term_ids:
+            definition = get_definition(term_id)
+            if definition is None:
+                continue
+            nested_ids.extend(extract_referenced_term_ids(definition))
+        term_ids = list(
+            dict.fromkeys(
+                [*term_ids, *(tid for tid in nested_ids if tid in home_index)]
+            )
+        )
+
     allowed_tags = _as_set(app.config.riddle_allowed_tags)
     allowed_schemes = _as_set(app.config.riddle_allowed_schemes)
     allowed_attributes = app.config.riddle_allowed_attributes
@@ -228,9 +251,7 @@ def inject_definition_templates(
         home = home_index[term_id]
         # P→home の依存記録は record_page_home_dependencies が親プロセスで一括済み
         # （並列書き出しでワーカー側 note_dependency が失われる問題を回避）。
-        if home not in defs_by_home:
-            defs_by_home[home] = extract_definitions(cache.get(home))
-        definition = defs_by_home[home].get(term_id)
+        definition = get_definition(term_id)
         if definition is None:
             continue
 
