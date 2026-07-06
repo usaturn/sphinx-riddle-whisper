@@ -40,6 +40,7 @@ def build_runtime_config(config: Config) -> dict[str, object]:
         "maxWidth": config.riddle_max_width,
         "footnotes": config.riddle_footnotes,
         "imagePopup": config.riddle_image_popup,
+        "nested": config.riddle_nested,
     }
 
 
