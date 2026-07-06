@@ -928,6 +928,7 @@ const CONFIG_DEFAULTS = Object.freeze({
   maxWidth: "32rem",
   footnotes: true,
   imagePopup: true,
+  nested: true,
 });
 
 // trigger に許可される値（これ以外は既定へ正規化する）。
@@ -969,7 +970,7 @@ function normalizeString(value, fallback) {
  * 既定値へ fallback する（fail-closed）。各フィールドも個別に再正規化する（多層防御。
  * Python 側 validate_config の二重化）。
  * @param {Document} doc 対象 document
- * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string}}
+ * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string, footnotes:boolean, imagePopup:boolean, nested:boolean}}
  */
 export function readRiddleConfig(doc) {
   const el = doc.getElementById(RIDDLE_CONFIG_ID);
@@ -1006,6 +1007,7 @@ export function readRiddleConfig(doc) {
     maxWidth: normalizeString(raw.maxWidth, CONFIG_DEFAULTS.maxWidth),
     footnotes: normalizeBoolean(raw.footnotes, CONFIG_DEFAULTS.footnotes),
     imagePopup: normalizeBoolean(raw.imagePopup, CONFIG_DEFAULTS.imagePopup),
+    nested: normalizeBoolean(raw.nested, CONFIG_DEFAULTS.nested),
   };
 }
 
