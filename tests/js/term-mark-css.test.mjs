@@ -139,3 +139,67 @@ for (const { varName, expectedRe } of TERM_ROOT_VARS) {
     );
   });
 }
+
+// @media print ブロック本体をブレース対応で切り出す
+//（.riddle-lightbox 規則などネストした {} を含むため regex 単発では不可）。
+function extractPrintBlock(cssText) {
+  const start = cssText.search(/@media\s+print\s*\{/i);
+  if (start === -1) {
+    return null;
+  }
+  const open = cssText.indexOf("{", start);
+  let depth = 1;
+  for (let i = open + 1; i < cssText.length; i += 1) {
+    if (cssText[i] === "{") {
+      depth += 1;
+    } else if (cssText[i] === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return cssText.slice(open + 1, i);
+      }
+    }
+  }
+  return null;
+}
+
+// @media print 内の a.riddle-term 規則の宣言ブロック本体を抽出する。
+function extractPrintTermRuleBlocks(cssText) {
+  const printBlock = extractPrintBlock(cssText);
+  if (printBlock === null) {
+    return [];
+  }
+  return [...printBlock.matchAll(/a\.riddle-term\b([^{}]*)\{([^}]*)\}/gi)]
+    .filter((m) => m[1].trim() === "")
+    .map((m) => m[2]);
+}
+
+// 印刷時はポップアップが動作しないため、マーキング装飾を解除する契約（レビュー L-1）。
+test("riddle.css: @media print で a.riddle-term の下線を解除している", () => {
+  // Arrange / Act
+  const blocks = extractPrintTermRuleBlocks(css);
+  const decls = blocks
+    .map((block) => /(?:^|[;{\s])text-decoration\s*:\s*([^;}]*)/i.exec(block))
+    .filter((m) => m !== null)
+    .map((m) => m[1].trim());
+
+  // Assert
+  assert.ok(
+    decls.some((value) => /^none$/i.test(value)),
+    `@media print の a.riddle-term に text-decoration: none が無い（値: ${JSON.stringify(decls)}）`,
+  );
+});
+
+test("riddle.css: @media print で a.riddle-term の cursor を auto に戻している", () => {
+  // Arrange / Act
+  const blocks = extractPrintTermRuleBlocks(css);
+  const decls = blocks
+    .map((block) => /\bcursor\s*:\s*([^;}]*)/i.exec(block))
+    .filter((m) => m !== null)
+    .map((m) => m[1].trim());
+
+  // Assert
+  assert.ok(
+    decls.some((value) => /^auto$/i.test(value)),
+    `@media print の a.riddle-term に cursor: auto が無い（cursor 値: ${JSON.stringify(decls)}）`,
+  );
+});

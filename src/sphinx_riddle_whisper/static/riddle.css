@@ -106,7 +106,8 @@
 
 /* 実際にポップする :term: トリガの視覚マーキング
    （riddle.js の markTermTriggers が riddle-term クラスを付与する契約）。
-   リンク色はテーマのまま維持し、点線下線＋ help カーソルだけで区別する。 */
+   リンク色はテーマのまま維持し、点線下線＋ help カーソルだけで区別する。
+   印刷時（@media print）はポップアップが動作しないため装飾を解除する。 */
 a.riddle-term {
   text-decoration-line: underline;
   text-decoration-style: var(--riddle-term-underline-style);
@@ -118,5 +119,11 @@ a.riddle-term {
 @media print {
   .riddle-lightbox {
     display: none !important;
+  }
+
+  /* 印刷ではポップアップが動作しないため、用語マーキングも解除する。 */
+  a.riddle-term {
+    text-decoration: none;
+    cursor: auto;
   }
 }
