@@ -26,6 +26,7 @@ _EXPECTED_CONFIG_NAMES = {
     "riddle_footnotes",
     "riddle_image_popup",
     "riddle_nested",
+    "riddle_mark_terms",
 }
 
 
@@ -41,6 +42,7 @@ def _make_default_config(**overrides):
         "riddle_footnotes": True,
         "riddle_image_popup": True,
         "riddle_nested": True,
+        "riddle_mark_terms": True,
         "riddle_include_term_title": True,
         "riddle_strip_classes": ("headerlink", "sd-stretched-link"),
         "riddle_sanitize": True,
@@ -409,6 +411,16 @@ def test_riddle_nestedが非boolのときExtensionErrorを送出する():
     # Act & Assert: 非 bool で ExtensionError が送出される
     with pytest.raises(ExtensionError):
         validate_config(app, config)
+
+
+def test_riddle_mark_termsが非boolのときExtensionErrorを送出する():
+    """riddle_mark_terms が非 bool（例 文字列 'true'）なら validate_config が ExtensionError を raise する。"""
+    # Arrange: 非 bool の値を持つ擬似 config を用意する
+    config = _make_default_config(riddle_mark_terms="true")
+
+    # Act & Assert: 非 bool で ExtensionError が送出される
+    with pytest.raises(ExtensionError):
+        validate_config(SimpleNamespace(), config)
 
 
 def test_setupがregister_config_valuesを呼びメタデータを返す(monkeypatch):

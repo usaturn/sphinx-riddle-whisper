@@ -348,6 +348,35 @@ const POPOVER_SELECTOR = `.${POPOVER_CLASS}`;
 // 共有ポップの id（aria-describedby の参照先）。id 未設定のとき付与する。
 const POPOVER_ID = "riddle-popover";
 
+// DOM 契約: 実際にポップする :term: トリガへ付与する視覚マーキングの class 名
+// （riddle.css の a.riddle-term 装飾規則と整合）。
+export const TERM_MARK_CLASS = "riddle-term";
+
+/**
+ * 実際にポップする :term: トリガリンクへ TERM_MARK_CLASS を付与する（視覚的区別）。
+ * 判定はポップ開閉経路と同じ部品（deriveTermId / getRiddleTemplate）を再利用し、
+ * 定義 template が実在するリンクだけをマークする（template 不在・DOM clobbering は
+ * 対象外の fail-closed）。popover 配下のリンクは再帰防止の既存方針どおり除外する。
+ * classList.add による付与のため再実行しても重複しない（冪等）。
+ * @param {Document} doc 対象 document
+ * @returns {number} マークしたアンカー数
+ */
+export function markTermTriggers(doc) {
+  let marked = 0;
+  for (const anchor of doc.querySelectorAll(TERM_TRIGGER_SELECTOR)) {
+    if (anchor.closest(POPOVER_SELECTOR) !== null) {
+      continue;
+    }
+    const termId = deriveTermId(anchor.getAttribute("href"));
+    if (termId === null || getRiddleTemplate(doc, termId) === null) {
+      continue;
+    }
+    anchor.classList.add(TERM_MARK_CLASS);
+    marked += 1;
+  }
+  return marked;
+}
+
 // DOM 契約: レベル2（ネスト）ポップの class 名・セレクタ・id。
 // レベル2は riddle-popover と riddle-popover--nested の両 class を持つ。
 const POPOVER_NESTED_CLASS = "riddle-popover--nested";
@@ -1048,6 +1077,7 @@ const CONFIG_DEFAULTS = Object.freeze({
   footnotes: true,
   imagePopup: true,
   nested: true,
+  markTerms: true,
 });
 
 // trigger に許可される値（これ以外は既定へ正規化する）。
@@ -1089,7 +1119,7 @@ function normalizeString(value, fallback) {
  * 既定値へ fallback する（fail-closed）。各フィールドも個別に再正規化する（多層防御。
  * Python 側 validate_config の二重化）。
  * @param {Document} doc 対象 document
- * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string, footnotes:boolean, imagePopup:boolean, nested:boolean}}
+ * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string, footnotes:boolean, imagePopup:boolean, nested:boolean, markTerms:boolean}}
  */
 export function readRiddleConfig(doc) {
   const el = doc.getElementById(RIDDLE_CONFIG_ID);
@@ -1127,6 +1157,7 @@ export function readRiddleConfig(doc) {
     footnotes: normalizeBoolean(raw.footnotes, CONFIG_DEFAULTS.footnotes),
     imagePopup: normalizeBoolean(raw.imagePopup, CONFIG_DEFAULTS.imagePopup),
     nested: normalizeBoolean(raw.nested, CONFIG_DEFAULTS.nested),
+    markTerms: normalizeBoolean(raw.markTerms, CONFIG_DEFAULTS.markTerms),
   };
 }
 
@@ -1158,7 +1189,15 @@ export function applyRiddleCssVars(doc, { maxHeight, maxWidth } = {}) {
 export function initRiddle(doc) {
   const cfg = readRiddleConfig(doc);
   applyRiddleCssVars(doc, cfg);
-  // installRiddlePopover は未知キー（maxHeight/maxWidth）を無視するため cfg をそのまま渡せる。
+  // installRiddlePopover は未知キー（maxHeight/maxWidth/markTerms）を無視するため cfg をそのまま渡せる。
   installRiddlePopover(doc, cfg);
+  if (cfg.markTerms) {
+    // 視覚マーキングの失敗はポップ機能を止めない（fail-safe）。
+    try {
+      markTermTriggers(doc);
+    } catch {
+      // マーキング失敗は無視する（ポップ機能は継続）。
+    }
+  }
   return cfg;
 }

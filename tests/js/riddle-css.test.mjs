@@ -1375,6 +1375,26 @@ const HIDDEN_AND_PRINT_CASES = [
     failMsg:
       "@media print 内で .riddle-lightbox の display: none !important が見つからない（印刷時にライトボックスが除外されない）",
   },
+  {
+    // レビュー M-1 固定: popover は position: fixed ＋ 最高 z-index の通常スタイルの
+    // まま印刷メディアにも当たるため、開いた状態（hidden が外れた状態）で印刷すると
+    // 本文の上に重なって出力される。@media print で display: none !important を当て、
+    // 開いている popover（ネスト popover も同じ class を持つ）を印刷から除外する。
+    label: "@media print 内で .riddle-popover に display: none !important がある",
+    test: (cssText) => {
+      // @media print{...} ブロック本体（1 段ネスト分）を抽出し、その中に
+      // .riddle-popover の display: none !important があるか確認する
+      // （.riddle-lightbox とのセレクタリスト併記も許容する）。
+      const printBlockMatch =
+        /@media\s+print\s*\{((?:[^{}]|\{[^{}]*\})*)\}/i.exec(cssText);
+      if (printBlockMatch === null) return false;
+      return /\.riddle-popover\b[^{}]*\{[^}]*\bdisplay\s*:\s*none\s*!important/i.test(
+        printBlockMatch[1],
+      );
+    },
+    failMsg:
+      "@media print 内で .riddle-popover の display: none !important が見つからない（開いた popover が印刷出力に残る）",
+  },
 ];
 
 for (const { label, test: checkFn, failMsg } of HIDDEN_AND_PRINT_CASES) {

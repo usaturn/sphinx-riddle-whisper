@@ -157,6 +157,10 @@ defaults are:
      - bool
      - ``True``
      - Open a second, nested popover from ``:term:`` links inside a popover.
+   * - ``riddle_mark_terms``
+     - bool
+     - ``True``
+     - Visually mark ``:term:`` links that pop up (dotted underline + help cursor).
 
 Example showing the defaults:
 
@@ -172,6 +176,7 @@ Example showing the defaults:
    riddle_footnotes = True
    riddle_image_popup = True
    riddle_nested = True
+   riddle_mark_terms = True
 
 Footnotes, Citations & Image Lightbox
 =====================================
@@ -197,6 +202,25 @@ normal links — and a link pointing to the term already shown in the first
 popover does not open a duplicate. Press Esc to close the inner popover first,
 then the outer one. Set the option to ``False`` to keep popover-internal
 ``:term:`` links inert.
+
+Visual marking of term links
+============================
+
+With ``riddle_mark_terms = True`` (default), only ``:term:`` links that
+actually show a popover get a dotted underline and a ``help`` cursor, so
+readers can tell them apart from ordinary links. Links whose definition is
+not injected into the page, or environments without JavaScript, show no
+marking (the link color is left to the theme). Note that ``:term:`` links
+rendered inside a popover are not marked.
+
+The underline can be customized via CSS variables:
+
+.. code-block:: css
+
+   :root {
+     --riddle-term-underline-style: dashed;  /* default: dotted */
+     --riddle-term-underline-color: #0a7;    /* default: currentColor */
+   }
 
 Security
 ========
