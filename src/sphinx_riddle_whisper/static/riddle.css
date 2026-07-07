@@ -62,6 +62,16 @@
   background: var(--riddle-code-bg) !important;
 }
 
+/* ポップアップ内画像のアスペクト比維持: サニタイザを通過した width/height 属性と
+   テーマの img { max-width: 100% } の組み合わせで「幅だけ縮み高さ固定」の歪みが
+   起きるため、幅はポップアップに収めつつ高さは常に自動とし元の比率を維持する
+   （書き手の幅指定は収まる限り尊重し、高さ指定は無視する裁定）。
+   !important はテーマ/拡張の高特定度 img 規則に勝つため必須（CSS は ESLint 対象外）。 */
+.riddle-popover img {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
 .riddle-popover[hidden] {
   display: none;
 }
