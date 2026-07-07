@@ -159,6 +159,10 @@ PyPI から:
      - bool
      - ``True``
      - ポップアップ内の ``:term:`` リンクから2段目のポップアップを開く。
+   * - ``riddle_mark_terms``
+     - bool
+     - ``True``
+     - ポップアップする ``:term:`` リンクへ視覚マーキング（点線下線＋ help カーソル）を付与します。
 
 既定値を明示した例:
 
@@ -174,6 +178,7 @@ PyPI から:
    riddle_footnotes = True
    riddle_image_popup = True
    riddle_nested = True
+   riddle_mark_terms = True
 
 脚注・引用・画像ライトボックス
 ==============================
@@ -198,6 +203,23 @@ PyPI から:
 用語と同じ用語へのリンクでは重複表示しません。Esc キーは内側（2段目）から順に
 閉じます。``False`` にするとポップアップ内の ``:term:`` リンクは従来どおり
 何も開きません。
+
+用語リンクの視覚マーキング
+==========================
+
+``riddle_mark_terms = True``\ （既定）では、ポップアップが実際に表示される
+``:term:`` リンクだけに点線下線と ``help`` カーソルが付き、通常のリンクと
+見分けられます。定義がページへ注入されていないリンクや JavaScript 無効環境では
+マーキングは付きません（リンク色はテーマのまま変更されません）。
+
+下線の見た目は CSS 変数で上書きできます:
+
+.. code-block:: css
+
+   :root {
+     --riddle-term-underline-style: dashed;  /* 既定: dotted */
+     --riddle-term-underline-color: #0a7;    /* 既定: currentColor */
+   }
 
 セキュリティ
 ============
