@@ -12,6 +12,9 @@ _T = TypeVar("_T")
 #: riddle_trigger に許可される値。
 _ALLOWED_TRIGGERS = ("hover", "click", "both")
 
+#: riddle_table_align に許可される値。
+_ALLOWED_TABLE_ALIGNS = ("left", "center", "right")
+
 #: (name, default, rebuild) のタプルで登録する設定値。
 #: allowed_* の既定 None は「sanitize.py の組み込み許可リストを使う」を意味する。
 _CONFIG_SPECS: tuple[tuple[str, object, Literal["html"]], ...] = (
@@ -31,6 +34,7 @@ _CONFIG_SPECS: tuple[tuple[str, object, Literal["html"]], ...] = (
     ("riddle_image_popup", True, "html"),
     ("riddle_nested", True, "html"),
     ("riddle_mark_terms", True, "html"),
+    ("riddle_table_align", "left", "html"),
 )
 
 
@@ -98,6 +102,13 @@ def validate_config(app: Sphinx, config: Config) -> None:
     _validate_bool("riddle_image_popup", config.riddle_image_popup)
     _validate_bool("riddle_nested", config.riddle_nested)
     _validate_bool("riddle_mark_terms", config.riddle_mark_terms)
+
+    _validate_type("riddle_table_align", config.riddle_table_align, str, "str")
+    if config.riddle_table_align not in _ALLOWED_TABLE_ALIGNS:
+        raise ExtensionError(
+            f"riddle_table_align は {_ALLOWED_TABLE_ALIGNS} のいずれかである必要があります: "
+            f"{config.riddle_table_align!r}"
+        )
 
     config.riddle_strip_classes = _normalize_str_iterable(
         "riddle_strip_classes",
