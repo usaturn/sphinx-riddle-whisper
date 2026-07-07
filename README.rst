@@ -210,7 +210,8 @@ With ``riddle_mark_terms = True`` (default), only ``:term:`` links that
 actually show a popover get a dotted underline and a ``help`` cursor, so
 readers can tell them apart from ordinary links. Links whose definition is
 not injected into the page, or environments without JavaScript, show no
-marking (the link color is left to the theme).
+marking (the link color is left to the theme). Note that ``:term:`` links
+rendered inside a popover are not marked.
 
 The underline can be customized via CSS variables:
 

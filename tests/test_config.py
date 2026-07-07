@@ -417,17 +417,10 @@ def test_riddle_mark_termsが非boolのときExtensionErrorを送出する():
     """riddle_mark_terms が非 bool（例 文字列 'true'）なら validate_config が ExtensionError を raise する。"""
     # Arrange: 非 bool の値を持つ擬似 config を用意する
     config = _make_default_config(riddle_mark_terms="true")
-    app = SimpleNamespace()
 
     # Act & Assert: 非 bool で ExtensionError が送出される
-    try:
-        validate_config(app, config)
-    except ExtensionError:
-        pass
-    else:
-        raise AssertionError(
-            "riddle_mark_terms='true' で ExtensionError が送出されなかった"
-        )
+    with pytest.raises(ExtensionError):
+        validate_config(SimpleNamespace(), config)
 
 
 def test_setupがregister_config_valuesを呼びメタデータを返す(monkeypatch):
