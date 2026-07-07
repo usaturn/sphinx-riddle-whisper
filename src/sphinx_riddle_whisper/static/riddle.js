@@ -1078,10 +1078,22 @@ const CONFIG_DEFAULTS = Object.freeze({
   imagePopup: true,
   nested: true,
   markTerms: true,
+  tableAlign: "left",
 });
 
 // trigger に許可される値（これ以外は既定へ正規化する）。
 const ALLOWED_TRIGGERS = new Set(["hover", "click", "both"]);
+
+// tableAlign に許可される値（これ以外は既定へ正規化する）。
+const ALLOWED_TABLE_ALIGNS = new Set(["left", "center", "right"]);
+
+// tableAlign の enum 値 → テーブル揃え CSS 変数値の対応表。
+// Map なのはプロトタイプ経由のキー（"constructor" 等）を誤って引かないため。
+const TABLE_ALIGN_CSS_VALUES = new Map([
+  ["left", { textAlign: "left", marginInline: "0 auto" }],
+  ["center", { textAlign: "center", marginInline: "auto auto" }],
+  ["right", { textAlign: "right", marginInline: "auto 0" }],
+]);
 
 /**
  * 値が 0 以上の整数ならその値を、そうでなければ fallback を返す。
@@ -1119,7 +1131,7 @@ function normalizeString(value, fallback) {
  * 既定値へ fallback する（fail-closed）。各フィールドも個別に再正規化する（多層防御。
  * Python 側 validate_config の二重化）。
  * @param {Document} doc 対象 document
- * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string, footnotes:boolean, imagePopup:boolean, nested:boolean, markTerms:boolean}}
+ * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string, footnotes:boolean, imagePopup:boolean, nested:boolean, markTerms:boolean, tableAlign:string}}
  */
 export function readRiddleConfig(doc) {
   const el = doc.getElementById(RIDDLE_CONFIG_ID);
@@ -1158,17 +1170,21 @@ export function readRiddleConfig(doc) {
     imagePopup: normalizeBoolean(raw.imagePopup, CONFIG_DEFAULTS.imagePopup),
     nested: normalizeBoolean(raw.nested, CONFIG_DEFAULTS.nested),
     markTerms: normalizeBoolean(raw.markTerms, CONFIG_DEFAULTS.markTerms),
+    tableAlign: ALLOWED_TABLE_ALIGNS.has(raw.tableAlign)
+      ? raw.tableAlign
+      : CONFIG_DEFAULTS.tableAlign,
   };
 }
 
 /**
- * max-height / max-width を CSS 変数として documentElement へ設定する。
+ * max-height / max-width / テーブル揃えを CSS 変数として documentElement へ設定する。
  * CSSOM プロパティ API（setProperty）のみを使い、テキスト（<style>）注入はしない
- * （CSS インジェクション面を作らない）。空文字・非 string はスキップする。
+ * （CSS インジェクション面を作らない）。空文字・非 string・許可外の tableAlign は
+ * スキップする（riddle.css の既定値＝左揃えに委ねる）。
  * @param {Document} doc 対象 document
- * @param {{maxHeight?:string, maxWidth?:string}} cfg max-height/max-width を含む設定
+ * @param {{maxHeight?:string, maxWidth?:string, tableAlign?:string}} cfg 適用する設定
  */
-export function applyRiddleCssVars(doc, { maxHeight, maxWidth } = {}) {
+export function applyRiddleCssVars(doc, { maxHeight, maxWidth, tableAlign } = {}) {
   const root = doc.documentElement;
   if (!root || !root.style) {
     return;
@@ -1178,6 +1194,11 @@ export function applyRiddleCssVars(doc, { maxHeight, maxWidth } = {}) {
   }
   if (typeof maxWidth === "string" && maxWidth) {
     root.style.setProperty("--riddle-max-width", maxWidth);
+  }
+  const tableCss = TABLE_ALIGN_CSS_VALUES.get(tableAlign);
+  if (tableCss) {
+    root.style.setProperty("--riddle-table-text-align", tableCss.textAlign);
+    root.style.setProperty("--riddle-table-margin-inline", tableCss.marginInline);
   }
 }
 

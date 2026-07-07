@@ -161,6 +161,10 @@ defaults are:
      - bool
      - ``True``
      - Visually mark ``:term:`` links that pop up (dotted underline + help cursor).
+   * - ``riddle_table_align``
+     - str
+     - ``"left"``
+     - Alignment of tables inside popovers: ``"left"``, ``"center"``, or ``"right"``.
 
 Example showing the defaults:
 
@@ -177,6 +181,7 @@ Example showing the defaults:
    riddle_image_popup = True
    riddle_nested = True
    riddle_mark_terms = True
+   riddle_table_align = "left"
 
 Footnotes, Citations & Image Lightbox
 =====================================
@@ -221,6 +226,16 @@ The underline can be customized via CSS variables:
      --riddle-term-underline-style: dashed;  /* default: dotted */
      --riddle-term-underline-color: #0a7;    /* default: currentColor */
    }
+
+Table Alignment Inside Popovers
+===============================
+
+Sphinx renders tables without an explicit ``:align:`` option with the
+``align-default`` class, which most themes center. Inside the narrow popover
+this looks odd, so such tables are left-aligned by default. Set
+``riddle_table_align`` to ``"center"`` or ``"right"`` to change this. Tables
+with an explicit ``:align:`` option keep their author-specified alignment,
+and the setting also applies to tables inside footnote and citation popovers.
 
 Security
 ========

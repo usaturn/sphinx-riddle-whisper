@@ -27,6 +27,7 @@ _EXPECTED_CONFIG_NAMES = {
     "riddle_image_popup",
     "riddle_nested",
     "riddle_mark_terms",
+    "riddle_table_align",
 }
 
 
@@ -43,6 +44,7 @@ def _make_default_config(**overrides):
         "riddle_image_popup": True,
         "riddle_nested": True,
         "riddle_mark_terms": True,
+        "riddle_table_align": "left",
         "riddle_include_term_title": True,
         "riddle_strip_classes": ("headerlink", "sd-stretched-link"),
         "riddle_sanitize": True,
@@ -438,3 +440,44 @@ def test_setupがregister_config_valuesを呼びメタデータを返す(monkeyp
     assert called.get("app") is app
     assert result["parallel_read_safe"] is True
     assert result["parallel_write_safe"] is True
+
+
+def test_riddle_table_alignの既定値leftとrebuild_htmlで登録される():
+    """register_config_values が riddle_table_align を既定 'left'・rebuild 'html' で登録する。"""
+    app = MagicMock()
+
+    register_config_values(app)
+
+    registered = {
+        call.args[0]: (call.args[1], call.args[2])
+        for call in app.add_config_value.call_args_list
+    }
+    assert registered["riddle_table_align"] == ("left", "html")
+
+
+def test_riddle_table_alignが許可外の値のときExtensionErrorを送出する():
+    """riddle_table_align が許可値（left/center/right）以外なら validate_config が ExtensionError を raise する。"""
+    config = _make_default_config(riddle_table_align="middle")
+    app = SimpleNamespace()
+
+    with pytest.raises(ExtensionError):
+        validate_config(app, config)
+
+
+def test_riddle_table_alignが非strのときExtensionErrorを送出する():
+    """riddle_table_align が str でなければ validate_config が ExtensionError を raise する。"""
+    config = _make_default_config(riddle_table_align=1)
+    app = SimpleNamespace()
+
+    with pytest.raises(ExtensionError):
+        validate_config(app, config)
+
+
+@pytest.mark.parametrize("value", ["left", "center", "right"])
+def test_riddle_table_alignの許可値は受理される(value):
+    """riddle_table_align の許可値（left/center/right）は validate_config を通過する。"""
+    config = _make_default_config(riddle_table_align=value)
+    app = SimpleNamespace()
+
+    # raise しなければ成功
+    validate_config(app, config)

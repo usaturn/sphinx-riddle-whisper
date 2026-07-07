@@ -14,6 +14,8 @@
   --riddle-backdrop: rgba(0, 0, 0, 0.85);
   --riddle-term-underline-style: dotted;
   --riddle-term-underline-color: currentColor;
+  --riddle-table-text-align: left;
+  --riddle-table-margin-inline: 0 auto;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -70,6 +72,20 @@
 .riddle-popover img {
   max-width: 100% !important;
   height: auto !important;
+}
+
+/* ポップアップ内テーブルの揃え: Sphinx は :align: 未指定のテーブルを
+   <table class="docutils align-default"> として出力し、テーマ basic.css の
+   .align-default { text-align: center } と table.align-default { margin: auto }
+   がポップアップ内にも効いて中央揃えになる。暗黙の align-default だけを
+   既定左揃えへ上書きし、書き手の明示 :align:（align-left/center/right）は
+   尊重する。値は conf.py の riddle_table_align から applyRiddleCssVars 経由で
+   CSS 変数として届く（JS 無効時は :root の既定値で左揃え）。用語・脚注/引用の
+   両ポップアップに効く。!important はテーマの高特定度規則に勝つため必須
+   （画像規則と同じ裁定。CSS は ESLint 対象外）。 */
+.riddle-popover table.align-default {
+  text-align: var(--riddle-table-text-align) !important;
+  margin-inline: var(--riddle-table-margin-inline) !important;
 }
 
 .riddle-popover[hidden] {

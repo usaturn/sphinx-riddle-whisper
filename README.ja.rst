@@ -163,6 +163,10 @@ PyPI から:
      - bool
      - ``True``
      - ポップアップする ``:term:`` リンクへ視覚マーキング（点線下線＋ help カーソル）を付与します。
+   * - ``riddle_table_align``
+     - str
+     - ``"left"``
+     - ポップアップ内テーブルの揃え: ``"left"`` / ``"center"`` / ``"right"``。
 
 既定値を明示した例:
 
@@ -179,6 +183,7 @@ PyPI から:
    riddle_image_popup = True
    riddle_nested = True
    riddle_mark_terms = True
+   riddle_table_align = "left"
 
 脚注・引用・画像ライトボックス
 ==============================
@@ -220,6 +225,16 @@ PyPI から:
      --riddle-term-underline-style: dashed;  /* 既定: dotted */
      --riddle-term-underline-color: #0a7;    /* 既定: currentColor */
    }
+
+ポップアップ内テーブルの揃え
+============================
+
+Sphinx は ``:align:`` 未指定のテーブルを ``align-default`` class 付きで出力し、
+多くのテーマはこれを中央揃えにします。狭いポップアップ内では不自然なため、
+本拡張はポップアップ内のこうしたテーブルを既定で左揃えにします。
+``riddle_table_align`` を ``"center"`` / ``"right"`` にすると変更できます。
+``:align:`` を明示したテーブルは書き手の指定どおりの揃えを維持します。
+この設定は脚注・引用ポップアップ内のテーブルにも適用されます。
 
 セキュリティ
 ============
