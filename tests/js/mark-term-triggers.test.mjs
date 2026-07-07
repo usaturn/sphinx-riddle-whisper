@@ -145,3 +145,19 @@ test("markTermTriggers: 2 回呼んでもクラスが重複しない（冪等）
     .filter((cls) => cls === TERM_MARK_CLASS).length;
   assert.equal(occurrences, 1);
 });
+
+test("markTermTriggers: query 内 %23term- を含む通常リンクはマークしない（セレクタ一致・deriveTermId 不一致）", () => {
+  // Arrange: セレクタ a[href*='%23term-'] には一致するが、リテラル '#' を含まない href。
+  // 対応 template を置き、「template があってもマークされない」ことで
+  // deriveTermId が null を返す fail-closed 経路を固定する。
+  const doc = docFromBody(
+    `<a id="t" href="/search?q=%23term-0">検索</a>${TEMPLATE_TERM_0}`,
+  );
+
+  // Act
+  const marked = markTermTriggers(doc);
+
+  // Assert
+  assert.equal(marked, 0);
+  assert.ok(!doc.getElementById("t").classList.contains(TERM_MARK_CLASS));
+});
