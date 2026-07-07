@@ -348,6 +348,35 @@ const POPOVER_SELECTOR = `.${POPOVER_CLASS}`;
 // 共有ポップの id（aria-describedby の参照先）。id 未設定のとき付与する。
 const POPOVER_ID = "riddle-popover";
 
+// DOM 契約: 実際にポップする :term: トリガへ付与する視覚マーキングの class 名
+// （riddle.css の a.riddle-term 装飾規則と整合）。
+export const TERM_MARK_CLASS = "riddle-term";
+
+/**
+ * 実際にポップする :term: トリガリンクへ TERM_MARK_CLASS を付与する（視覚的区別）。
+ * 判定はポップ開閉経路と同じ部品（deriveTermId / getRiddleTemplate）を再利用し、
+ * 定義 template が実在するリンクだけをマークする（template 不在・DOM clobbering は
+ * 対象外の fail-closed）。popover 配下のリンクは再帰防止の既存方針どおり除外する。
+ * classList.add による付与のため再実行しても重複しない（冪等）。
+ * @param {Document} doc 対象 document
+ * @returns {number} マークしたアンカー数
+ */
+export function markTermTriggers(doc) {
+  let marked = 0;
+  for (const anchor of doc.querySelectorAll(TERM_TRIGGER_SELECTOR)) {
+    if (anchor.closest(POPOVER_SELECTOR) !== null) {
+      continue;
+    }
+    const termId = deriveTermId(anchor.getAttribute("href"));
+    if (termId === null || getRiddleTemplate(doc, termId) === null) {
+      continue;
+    }
+    anchor.classList.add(TERM_MARK_CLASS);
+    marked += 1;
+  }
+  return marked;
+}
+
 // DOM 契約: レベル2（ネスト）ポップの class 名・セレクタ・id。
 // レベル2は riddle-popover と riddle-popover--nested の両 class を持つ。
 const POPOVER_NESTED_CLASS = "riddle-popover--nested";
