@@ -1078,10 +1078,14 @@ const CONFIG_DEFAULTS = Object.freeze({
   imagePopup: true,
   nested: true,
   markTerms: true,
+  tableAlign: "left",
 });
 
 // trigger に許可される値（これ以外は既定へ正規化する）。
 const ALLOWED_TRIGGERS = new Set(["hover", "click", "both"]);
+
+// tableAlign に許可される値（これ以外は既定へ正規化する）。
+const ALLOWED_TABLE_ALIGNS = new Set(["left", "center", "right"]);
 
 /**
  * 値が 0 以上の整数ならその値を、そうでなければ fallback を返す。
@@ -1119,7 +1123,7 @@ function normalizeString(value, fallback) {
  * 既定値へ fallback する（fail-closed）。各フィールドも個別に再正規化する（多層防御。
  * Python 側 validate_config の二重化）。
  * @param {Document} doc 対象 document
- * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string, footnotes:boolean, imagePopup:boolean, nested:boolean, markTerms:boolean}}
+ * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string, footnotes:boolean, imagePopup:boolean, nested:boolean, markTerms:boolean, tableAlign:string}}
  */
 export function readRiddleConfig(doc) {
   const el = doc.getElementById(RIDDLE_CONFIG_ID);
@@ -1158,6 +1162,9 @@ export function readRiddleConfig(doc) {
     imagePopup: normalizeBoolean(raw.imagePopup, CONFIG_DEFAULTS.imagePopup),
     nested: normalizeBoolean(raw.nested, CONFIG_DEFAULTS.nested),
     markTerms: normalizeBoolean(raw.markTerms, CONFIG_DEFAULTS.markTerms),
+    tableAlign: ALLOWED_TABLE_ALIGNS.has(raw.tableAlign)
+      ? raw.tableAlign
+      : CONFIG_DEFAULTS.tableAlign,
   };
 }
 
