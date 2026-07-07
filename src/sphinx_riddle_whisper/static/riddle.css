@@ -117,7 +117,10 @@ a.riddle-term {
 }
 
 @media print {
-  .riddle-lightbox {
+  /* 開いた状態の popover / lightbox が印刷出力へ残らないように除外する
+     （ネスト popover も同じ .riddle-popover class を持つため単一規則で覆える）。 */
+  .riddle-lightbox,
+  .riddle-popover {
     display: none !important;
   }
 
