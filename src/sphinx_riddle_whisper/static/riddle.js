@@ -1077,6 +1077,7 @@ const CONFIG_DEFAULTS = Object.freeze({
   footnotes: true,
   imagePopup: true,
   nested: true,
+  markTerms: true,
 });
 
 // trigger に許可される値（これ以外は既定へ正規化する）。
@@ -1118,7 +1119,7 @@ function normalizeString(value, fallback) {
  * 既定値へ fallback する（fail-closed）。各フィールドも個別に再正規化する（多層防御。
  * Python 側 validate_config の二重化）。
  * @param {Document} doc 対象 document
- * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string, footnotes:boolean, imagePopup:boolean, nested:boolean}}
+ * @returns {{trigger:string, openDelayMs:number, closeDelayMs:number, interactive:boolean, maxHeight:string, maxWidth:string, footnotes:boolean, imagePopup:boolean, nested:boolean, markTerms:boolean}}
  */
 export function readRiddleConfig(doc) {
   const el = doc.getElementById(RIDDLE_CONFIG_ID);
@@ -1156,6 +1157,7 @@ export function readRiddleConfig(doc) {
     footnotes: normalizeBoolean(raw.footnotes, CONFIG_DEFAULTS.footnotes),
     imagePopup: normalizeBoolean(raw.imagePopup, CONFIG_DEFAULTS.imagePopup),
     nested: normalizeBoolean(raw.nested, CONFIG_DEFAULTS.nested),
+    markTerms: normalizeBoolean(raw.markTerms, CONFIG_DEFAULTS.markTerms),
   };
 }
 
@@ -1187,7 +1189,15 @@ export function applyRiddleCssVars(doc, { maxHeight, maxWidth } = {}) {
 export function initRiddle(doc) {
   const cfg = readRiddleConfig(doc);
   applyRiddleCssVars(doc, cfg);
-  // installRiddlePopover は未知キー（maxHeight/maxWidth）を無視するため cfg をそのまま渡せる。
+  // installRiddlePopover は未知キー（maxHeight/maxWidth/markTerms）を無視するため cfg をそのまま渡せる。
   installRiddlePopover(doc, cfg);
+  if (cfg.markTerms) {
+    // 視覚マーキングの失敗はポップ機能を止めない（fail-safe）。
+    try {
+      markTermTriggers(doc);
+    } catch {
+      // マーキング失敗は無視する（ポップ機能は継続）。
+    }
+  }
   return cfg;
 }
