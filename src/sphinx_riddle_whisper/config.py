@@ -30,6 +30,7 @@ _CONFIG_SPECS: tuple[tuple[str, object, Literal["html"]], ...] = (
     ("riddle_footnotes", True, "html"),
     ("riddle_image_popup", True, "html"),
     ("riddle_nested", True, "html"),
+    ("riddle_mark_terms", True, "html"),
 )
 
 
@@ -96,6 +97,7 @@ def validate_config(app: Sphinx, config: Config) -> None:
     _validate_bool("riddle_footnotes", config.riddle_footnotes)
     _validate_bool("riddle_image_popup", config.riddle_image_popup)
     _validate_bool("riddle_nested", config.riddle_nested)
+    _validate_bool("riddle_mark_terms", config.riddle_mark_terms)
 
     config.riddle_strip_classes = _normalize_str_iterable(
         "riddle_strip_classes",
