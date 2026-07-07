@@ -12,6 +12,8 @@
   --riddle-th-bg: #f0f0f0;
   --riddle-code-bg: #f4f4f4;
   --riddle-backdrop: rgba(0, 0, 0, 0.85);
+  --riddle-term-underline-style: dotted;
+  --riddle-term-underline-color: currentColor;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -100,6 +102,17 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
+}
+
+/* 実際にポップする :term: トリガの視覚マーキング
+   （riddle.js の markTermTriggers が riddle-term クラスを付与する契約）。
+   リンク色はテーマのまま維持し、点線下線＋ help カーソルだけで区別する。 */
+a.riddle-term {
+  text-decoration-line: underline;
+  text-decoration-style: var(--riddle-term-underline-style);
+  text-decoration-color: var(--riddle-term-underline-color);
+  text-underline-offset: 0.2em;
+  cursor: help;
 }
 
 @media print {
