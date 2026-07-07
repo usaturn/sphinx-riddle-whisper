@@ -42,6 +42,7 @@ def build_runtime_config(config: Config) -> dict[str, object]:
         "imagePopup": config.riddle_image_popup,
         "nested": config.riddle_nested,
         "markTerms": config.riddle_mark_terms,
+        "tableAlign": config.riddle_table_align,
     }
 
 
