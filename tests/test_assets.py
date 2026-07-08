@@ -1,9 +1,9 @@
 """アセット（riddle.js / riddle.css）の登録と static 同梱を検証するテスト。"""
 
-import re
 from pathlib import Path
 
 import pytest
+from bs4 import BeautifulSoup
 
 
 @pytest.mark.sphinx("html", testroot="min", warningiserror=True)
@@ -34,14 +34,18 @@ def test_html_build後にriddle_initがtype_moduleのscriptとして読み込ま
     # Act: HTML ビルドを実行し index.html を読む
     app.build()
     html = (Path(app.outdir) / "index.html").read_text(encoding="utf-8")
+    soup = BeautifulSoup(html, "html.parser")
 
     # Assert: riddle-init.js を参照する <script ...> タグはすべて type="module" を持つ
-    script_tags = re.findall(r"<script\b[^>]*>", html)
-    init_script_tags = [tag for tag in script_tags if "riddle-init.js" in tag]
+    init_script_tags = [
+        script
+        for script in soup.find_all("script")
+        if "riddle-init.js" in (script.get("src") or "")
+    ]
     assert init_script_tags, (
         "riddle-init.js を参照する script タグが index.html に存在しない"
     )
-    assert all('type="module"' in tag for tag in init_script_tags), (
+    assert all(script.get("type") == "module" for script in init_script_tags), (
         f'riddle-init.js の script タグに type="module" が無い: {init_script_tags}'
     )
 
