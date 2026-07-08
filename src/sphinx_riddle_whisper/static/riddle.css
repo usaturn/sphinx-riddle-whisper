@@ -133,8 +133,13 @@
 /* 実際にポップする :term: トリガの視覚マーキング
    （riddle.js の markTermTriggers が riddle-term クラスを付与する契約）。
    リンク色はテーマのまま維持し、点線下線＋ help カーソルだけで区別する。
-   印刷時（@media print）はポップアップが動作しないため装飾を解除する。 */
-a.riddle-term {
+   印刷時（@media print）はポップアップが動作しないため装飾を解除する。
+   クラス重ね（詳細度 (0,2,1)）はテーマ CSS 対策: bizstyle 等の
+   div.body a — text-decoration: underline（詳細度 (0,1,2)）— は
+   ショートハンドで text-decoration-style を solid にリセットするため、
+   単一クラス (0,1,1) では負ける。
+   注: この comment 内に波括弧を書かない（テストの規則抽出がブレース走査のため）。 */
+a.riddle-term.riddle-term {
   text-decoration-line: underline;
   text-decoration-style: var(--riddle-term-underline-style);
   text-decoration-color: var(--riddle-term-underline-color);
@@ -150,8 +155,9 @@ a.riddle-term {
     display: none !important;
   }
 
-  /* 印刷ではポップアップが動作しないため、用語マーキングも解除する。 */
-  a.riddle-term {
+  /* 印刷ではポップアップが動作しないため、用語マーキングも解除する。
+     ベース規則（クラス重ね (0,2,1)）に勝つ必要があるため同じセレクタ形にする。 */
+  a.riddle-term.riddle-term {
     text-decoration: none;
     cursor: auto;
   }
