@@ -20,3 +20,9 @@ def test_code_scanning_alert_2_avoids_regex_script_tag_extraction() -> None:
     source = _read_repo_file("tests/test_runtime_config.py")
 
     assert r're.findall(r"<script\b[^>]*>", html)' not in source
+
+
+def test_code_scanning_alert_3_avoids_single_scheme_url_residue_check() -> None:
+    source = _read_repo_file("tests/js/sanitize-fragment.test.mjs")
+
+    assert "startsWith(dangerScheme)" not in source
