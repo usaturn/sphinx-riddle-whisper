@@ -14,3 +14,9 @@ def test_code_scanning_alert_1_avoids_regex_script_tag_extraction() -> None:
     source = _read_repo_file("tests/test_assets.py")
 
     assert r're.findall(r"<script\b[^>]*>", html)' not in source
+
+
+def test_code_scanning_alert_2_avoids_regex_script_tag_extraction() -> None:
+    source = _read_repo_file("tests/test_runtime_config.py")
+
+    assert r're.findall(r"<script\b[^>]*>", html)' not in source

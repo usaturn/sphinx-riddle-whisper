@@ -11,6 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from bs4 import BeautifulSoup
 
 from sphinx_riddle_whisper.runtime_config import (
     build_runtime_config,
@@ -428,10 +429,14 @@ def test_実ビルドでriddle_initがtype_moduleのscriptとして読み込ま�
     app.build()
     html = (Path(app.outdir) / "index.html").read_text(encoding="utf-8")
 
-    script_tags = re.findall(r"<script\b[^>]*>", html)
-    init_tags = [tag for tag in script_tags if "riddle-init.js" in tag]
+    soup = BeautifulSoup(html, "html.parser")
+    init_tags = [
+        script
+        for script in soup.find_all("script")
+        if "riddle-init.js" in (script.get("src") or "")
+    ]
     assert init_tags, "riddle-init.js を参照する script タグが index.html に無い"
-    assert all('type="module"' in tag for tag in init_tags), (
+    assert all(script.get("type") == "module" for script in init_tags), (
         f'riddle-init.js の script タグに type="module" が付いていない: {init_tags}'
     )
 
