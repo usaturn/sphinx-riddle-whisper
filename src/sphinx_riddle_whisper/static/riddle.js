@@ -1050,6 +1050,11 @@ export function installRiddlePopover(doc, options = {}) {
       }
       return;
     }
+    // ポップ内 term（レベル2相当）の click は新タブのみ: hover/focus で予約済みの
+    // 保留 open を取り消し、遅延後にレベル2が元タブで開く競合を防ぐ。
+    if (triggerEl !== null) {
+      cancelTimer();
+    }
 
     // トリガでもポップ内でもない外側クリックなら全レベル閉じる。
     if (isOutsidePopover(event)) {
