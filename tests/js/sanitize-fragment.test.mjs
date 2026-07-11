@@ -657,3 +657,20 @@ test("二次防御走査: 許可要素 <img> の src はスキーム検査対象
   assert.equal(isSafeUrl(jsSrc), false, "危険スキーム src は isSafeUrl 単体では false");
   assert.equal(isSafeUrl(dataSrc), false, "data スキーム src は isSafeUrl 単体では false");
 });
+
+// target=_blank への rel 付与は既存 rel トークンを保持してマージする。
+test("二次防御走査: target=_blank の rel は既存トークンを保持してマージされる", () => {
+  // Arrange
+  const frag = cloneTipFragment(
+    '<p><a href="../topic.html" target="_blank" rel="nofollow">link</a></p>',
+  );
+
+  // Act
+  sanitizeFragment(frag);
+
+  // Assert
+  assert.equal(
+    frag.querySelector("a").getAttribute("rel"),
+    "nofollow noopener noreferrer",
+  );
+});

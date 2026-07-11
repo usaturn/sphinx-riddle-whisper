@@ -221,7 +221,23 @@ export function isSafeUrl(value) {
 }
 
 /**
- * 許可要素の属性を浄化する（on* 除去・危険スキーム URL 除去・target=_blank への rel 付与）。
+ * アンカーへ、既存の rel トークンを保持したまま noopener / noreferrer を
+ * マージ付与する（target="_blank" の reverse tabnabbing 防止。重複なし・冪等）。
+ * @param {Element} el 対象要素（破壊的に変更する）
+ */
+function mergeNoopenerRel(el) {
+  const tokens = new Set(
+    (el.getAttribute("rel") ?? "")
+      .split(/\s+/)
+      .filter((token) => token !== ""),
+  );
+  tokens.add("noopener");
+  tokens.add("noreferrer");
+  el.setAttribute("rel", [...tokens].join(" "));
+}
+
+/**
+ * 許可要素の属性を浄化する（on* 除去・危険スキーム URL 除去・target=_blank への rel マージ付与）。
  * @param {Element} el 浄化対象の要素（破壊的に変更する）
  */
 function sanitizeElementAttributes(el) {
@@ -234,7 +250,7 @@ function sanitizeElementAttributes(el) {
     }
   }
   if (el.getAttribute("target") === "_blank") {
-    el.setAttribute("rel", "noopener noreferrer");
+    mergeNoopenerRel(el);
   }
 }
 
@@ -286,6 +302,35 @@ export function sanitizeFragment(frag) {
   // 走査完了後にまとめて除去する（走査中の DOM 変更による巡回崩れを避ける）。
   for (const el of toRemove) {
     unwrapElement(el);
+  }
+  return frag;
+}
+
+/**
+ * ポップオーバー挿入前の fragment 内リンクへ新タブ属性を付与する（表示ポリシー）。
+ * 除外は「ライトボックスが click を実際に横取りするアンカー」のみ:
+ * imagePopup 有効・a.image-reference[href]・resolveImageSrc 非 null の全成立
+ * （click ハンドラのライトボックス判定と同一条件）。
+ * target="_blank" には既存 rel を保持したまま noopener / noreferrer を
+ * マージ付与する（reverse tabnabbing 防止）。sanitizeFragment の後段で
+ * 適用する前提（危険スキームの href はサニタイザが先に除去済み）。冪等。
+ * @param {DocumentFragment} frag 走査対象（破壊的に変更する）
+ * @param {object} [options] オプション
+ * @param {boolean} [options.imagePopup] 画像ライトボックスが有効か（既定 false）
+ * @param {string} [options.baseURI] 相対 href 解決のベース（doc.baseURI）
+ * @returns {DocumentFragment} 走査済みの frag
+ */
+export function retargetFragmentLinks(frag, { imagePopup = false, baseURI } = {}) {
+  for (const anchor of frag.querySelectorAll("a[href]")) {
+    if (
+      imagePopup &&
+      anchor.matches(IMAGE_TRIGGER_SELECTOR) &&
+      resolveImageSrc(anchor, baseURI) !== null
+    ) {
+      continue;
+    }
+    anchor.setAttribute("target", "_blank");
+    mergeNoopenerRel(anchor);
   }
   return frag;
 }
@@ -776,7 +821,11 @@ export function installRiddlePopover(doc, options = {}) {
       );
       state.hoverWired = true;
     }
-    popover.replaceChildren(result.fragment);
+    // 表示ポリシー: ポップ内リンクは新しいタブで開く
+    // （ライトボックスが click を横取りする画像リンクのみ除外）。
+    popover.replaceChildren(
+      retargetFragmentLinks(result.fragment, { imagePopup, baseURI: doc.baseURI }),
+    );
     // a11y: 開く時に role='tooltip' を付与し、参照用の id を確保して、
     // トリガへ aria-describedby=popover.id を設定する（レベル別 id）。
     popover.setAttribute("role", "tooltip");
@@ -990,13 +1039,21 @@ export function installRiddlePopover(doc, options = {}) {
       }
     }
 
-    // 脚注・用語トリガ。
+    // 脚注・用語トリガ。レベル2（ポップ内 term）は click では開かない:
+    // target="_blank" による新タブ遷移（ブラウザ既定動作）へ委ね、下の閉じ
+    // ロジックへ落とす（hover で開いた古いレベル2があれば closePopover(2) で閉じる）。
+    // ネストポップの表示は hover / focus 経路でのみ行う。
     const triggerEl = findTriggerFromEvent(event, triggerSelector, nested);
-    if (triggerEl !== null) {
+    if (triggerEl !== null && levelOfTrigger(triggerEl) === 1) {
       if (openOnClick) {
         openFromTrigger(triggerEl);
       }
       return;
+    }
+    // ポップ内 term（レベル2相当）の click は新タブのみ: hover/focus で予約済みの
+    // 保留 open を取り消し、遅延後にレベル2が元タブで開く競合を防ぐ。
+    if (triggerEl !== null) {
+      cancelTimer();
     }
 
     // トリガでもポップ内でもない外側クリックなら全レベル閉じる。

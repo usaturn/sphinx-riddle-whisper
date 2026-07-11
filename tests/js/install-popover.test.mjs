@@ -1935,3 +1935,59 @@ for (const { name, nullifyView } of defaultTimerResolutionCases) {
     }, "タイマー未注入かつ defaultView の有無に関わらず install は例外を投げてはならない（既定解決は fail-safe であるべき）");
   });
 }
+
+// 新タブ化（結合）: imagePopup 有効時、popover 内の通常リンクは target=_blank + rel を
+// 持ち、ライトボックス適格な画像リンクには付与されない（ライトボックス動作維持）。
+test("結合: imagePopup 有効時は通常リンクのみ新タブ属性つきで画像リンクは除外される", () => {
+  // Arrange: 通常リンクと画像リンクを含む定義断片を持つ document
+  const dom = new JSDOM(
+    "<!DOCTYPE html><body>" +
+      '<a class="t" href="#term-0">用語0</a>' +
+      '<template id="riddle-tip--term-0">' +
+      '<p><a href="../other.html">通常リンク</a>' +
+      '<a class="image-reference" href="pic.png"><img src="pic.png" alt=""></a></p>' +
+      "</template>" +
+      "</body>",
+  );
+  const doc = dom.window.document;
+  installRiddlePopover(doc, { imagePopup: true });
+
+  // Act: トリガを click して popover を表示する
+  doc.querySelector("a.t").dispatchEvent(
+    new doc.defaultView.MouseEvent("click", { bubbles: true, cancelable: true }),
+  );
+
+  // Assert: 通常リンクは新タブ属性つき、画像リンクは無変更
+  const popover = doc.querySelector(".riddle-popover");
+  const normal = popover.querySelector('a[href="../other.html"]');
+  assert.equal(normal.getAttribute("target"), "_blank");
+  assert.equal(normal.getAttribute("rel"), "noopener noreferrer");
+  const image = popover.querySelector("a.image-reference");
+  assert.equal(image.hasAttribute("target"), false, "画像リンクへは付与しない");
+});
+
+// 新タブ化（結合）: imagePopup 無効（既定）ではライトボックスが無いため、
+// popover 内の画像リンクも新タブ属性を持つ（ページを離れない）。
+test("結合: imagePopup 無効時は popover 内の画像リンクも新タブ属性を持つ", () => {
+  // Arrange
+  const dom = new JSDOM(
+    "<!DOCTYPE html><body>" +
+      '<a class="t" href="#term-0">用語0</a>' +
+      '<template id="riddle-tip--term-0">' +
+      '<p><a class="image-reference" href="pic.png"><img src="pic.png" alt=""></a></p>' +
+      "</template>" +
+      "</body>",
+  );
+  const doc = dom.window.document;
+  installRiddlePopover(doc);
+
+  // Act
+  doc.querySelector("a.t").dispatchEvent(
+    new doc.defaultView.MouseEvent("click", { bubbles: true, cancelable: true }),
+  );
+
+  // Assert
+  const image = doc.querySelector(".riddle-popover a.image-reference");
+  assert.equal(image.getAttribute("target"), "_blank");
+  assert.equal(image.getAttribute("rel"), "noopener noreferrer");
+});

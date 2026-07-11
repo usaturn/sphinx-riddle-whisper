@@ -43,8 +43,12 @@ Features
   at build time and re-checked in the browser as a second line of defense.
 - **Incremental build aware** — pages that reference a term are rebuilt when the
   term's home definition changes.
-- **Nested popovers** — a ``:term:`` link inside a popover opens a second-level
-  popover (capped at two levels, configurable).
+- **Nested popovers** — hovering (or focusing) a ``:term:`` link inside a popover
+  opens a second-level popover (capped at two levels, configurable); clicking it
+  opens the glossary in a new tab instead.
+- **New-tab links** — links inside a popover open in a new browser tab with
+  ``rel="noopener noreferrer"`` (image links keep the lightbox behavior while
+  the image lightbox is enabled).
 
 Requirements
 ============
@@ -199,14 +203,18 @@ Set either option to ``False`` to disable that feature.
 Nested Popovers
 ===============
 
-With ``riddle_nested = True`` (the default), a ``:term:`` link inside an open
-popover opens a second, nested popover on top of the first, so definitions that
-reference other terms can be explored without leaving the page. Nesting is
-capped at two levels — ``:term:`` links inside the second popover behave as
-normal links — and a link pointing to the term already shown in the first
-popover does not open a duplicate. Press Esc to close the inner popover first,
-then the outer one. Set the option to ``False`` to keep popover-internal
-``:term:`` links inert.
+With ``riddle_nested = True`` (the default), hovering or focusing a ``:term:``
+link inside an open popover opens a second, nested popover on top of the first,
+so definitions that reference other terms can be explored without leaving the
+page. Clicking such a link opens the glossary in a new browser tab instead.
+Nesting is capped at two levels — ``:term:`` links inside the second popover
+behave as normal links — and a link pointing to the term already shown in the
+first popover does not open a duplicate. Press Esc to close the inner popover
+first, then the outer one. Set the option to ``False`` to disable nesting;
+popover-internal ``:term:`` links then behave like any other popover link and
+open the glossary in a new tab. With ``riddle_trigger = "click"``, nested
+popovers are not reachable; popover-internal ``:term:`` links simply open the
+glossary in a new tab.
 
 Visual marking of term links
 ============================
