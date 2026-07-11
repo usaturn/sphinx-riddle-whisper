@@ -210,8 +210,11 @@ page. Clicking such a link opens the glossary in a new browser tab instead.
 Nesting is capped at two levels — ``:term:`` links inside the second popover
 behave as normal links — and a link pointing to the term already shown in the
 first popover does not open a duplicate. Press Esc to close the inner popover
-first, then the outer one. Set the option to ``False`` to keep popover-internal
-``:term:`` links inert.
+first, then the outer one. Set the option to ``False`` to disable nesting;
+popover-internal ``:term:`` links then behave like any other popover link and
+open the glossary in a new tab. With ``riddle_trigger = "click"``, nested
+popovers are not reachable; popover-internal ``:term:`` links simply open the
+glossary in a new tab.
 
 Visual marking of term links
 ============================
