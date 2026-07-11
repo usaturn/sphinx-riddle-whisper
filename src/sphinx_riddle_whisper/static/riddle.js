@@ -796,7 +796,8 @@ export function installRiddlePopover(doc, options = {}) {
       );
       state.hoverWired = true;
     }
-    popover.replaceChildren(result.fragment);
+    // 表示ポリシー: ポップ内リンクは新しいタブで開く（画像リンクは除外）。
+    popover.replaceChildren(retargetFragmentLinks(result.fragment));
     // a11y: 開く時に role='tooltip' を付与し、参照用の id を確保して、
     // トリガへ aria-describedby=popover.id を設定する（レベル別 id）。
     popover.setAttribute("role", "tooltip");
