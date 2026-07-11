@@ -45,6 +45,8 @@ Features
   term's home definition changes.
 - **Nested popovers** — a ``:term:`` link inside a popover opens a second-level
   popover (capped at two levels, configurable).
+- **New-tab links** — links inside a popover open in a new browser tab with
+  ``rel="noopener noreferrer"`` (image links keep the lightbox behavior).
 
 Requirements
 ============
