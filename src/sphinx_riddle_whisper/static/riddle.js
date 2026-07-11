@@ -290,6 +290,26 @@ export function sanitizeFragment(frag) {
   return frag;
 }
 
+/**
+ * ポップオーバー挿入前の fragment 内リンクへ新タブ属性を付与する（表示ポリシー）。
+ * img 子孫を持つアンカー（画像リンク＝ライトボックス対象）は除外する。
+ * target="_blank" には rel="noopener noreferrer" を必ず併せて付与する
+ * （reverse tabnabbing 防止）。sanitizeFragment の後段で適用する前提
+ * （危険スキームの href はサニタイザが先に除去済み）。冪等。
+ * @param {DocumentFragment} frag 走査対象（破壊的に変更する）
+ * @returns {DocumentFragment} 走査済みの frag
+ */
+export function retargetFragmentLinks(frag) {
+  for (const anchor of frag.querySelectorAll("a[href]")) {
+    if (anchor.querySelector("img") !== null) {
+      continue;
+    }
+    anchor.setAttribute("target", "_blank");
+    anchor.setAttribute("rel", "noopener noreferrer");
+  }
+  return frag;
+}
+
 // 画像拡張子（href がこれに一致するときだけライトボックス化する。fail-closed）。
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|svg|avif)(?:[?#].*)?$/i;
 
