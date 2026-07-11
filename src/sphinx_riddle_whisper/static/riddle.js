@@ -221,7 +221,23 @@ export function isSafeUrl(value) {
 }
 
 /**
- * 許可要素の属性を浄化する（on* 除去・危険スキーム URL 除去・target=_blank への rel 付与）。
+ * アンカーへ、既存の rel トークンを保持したまま noopener / noreferrer を
+ * マージ付与する（target="_blank" の reverse tabnabbing 防止。重複なし・冪等）。
+ * @param {Element} el 対象要素（破壊的に変更する）
+ */
+function mergeNoopenerRel(el) {
+  const tokens = new Set(
+    (el.getAttribute("rel") ?? "")
+      .split(/\s+/)
+      .filter((token) => token !== ""),
+  );
+  tokens.add("noopener");
+  tokens.add("noreferrer");
+  el.setAttribute("rel", [...tokens].join(" "));
+}
+
+/**
+ * 許可要素の属性を浄化する（on* 除去・危険スキーム URL 除去・target=_blank への rel マージ付与）。
  * @param {Element} el 浄化対象の要素（破壊的に変更する）
  */
 function sanitizeElementAttributes(el) {
@@ -234,7 +250,7 @@ function sanitizeElementAttributes(el) {
     }
   }
   if (el.getAttribute("target") === "_blank") {
-    el.setAttribute("rel", "noopener noreferrer");
+    mergeNoopenerRel(el);
   }
 }
 
@@ -293,7 +309,7 @@ export function sanitizeFragment(frag) {
 /**
  * ポップオーバー挿入前の fragment 内リンクへ新タブ属性を付与する（表示ポリシー）。
  * img 子孫を持つアンカー（画像リンク＝ライトボックス対象）は除外する。
- * target="_blank" には rel="noopener noreferrer" を必ず併せて付与する
+ * target="_blank" には既存 rel を保持したまま noopener / noreferrer をマージ付与する
  * （reverse tabnabbing 防止）。sanitizeFragment の後段で適用する前提
  * （危険スキームの href はサニタイザが先に除去済み）。冪等。
  * @param {DocumentFragment} frag 走査対象（破壊的に変更する）
@@ -305,7 +321,7 @@ export function retargetFragmentLinks(frag) {
       continue;
     }
     anchor.setAttribute("target", "_blank");
-    anchor.setAttribute("rel", "noopener noreferrer");
+    mergeNoopenerRel(anchor);
   }
   return frag;
 }

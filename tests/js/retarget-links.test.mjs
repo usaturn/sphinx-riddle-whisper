@@ -99,3 +99,37 @@ test("retarget: 引数の frag 自身を返す", () => {
   // Act / Assert
   assert.equal(retargetFragmentLinks(frag), frag);
 });
+
+// rel マージ: 既存の rel トークンを保持したまま noopener / noreferrer を追加する。
+test("retarget: 既存 rel は上書きせず noopener noreferrer をマージする", () => {
+  // Arrange
+  const frag = cloneTipFragment(
+    '<p><a href="page.html" rel="nofollow">リンク</a></p>',
+  );
+
+  // Act
+  retargetFragmentLinks(frag);
+
+  // Assert
+  assert.equal(
+    frag.querySelector("a").getAttribute("rel"),
+    "nofollow noopener noreferrer",
+  );
+});
+
+// rel マージ冪等: 再適用しても rel トークンが重複しない。
+test("retarget: rel マージは冪等（再適用で重複しない）", () => {
+  // Arrange
+  const frag = cloneTipFragment(
+    '<p><a href="page.html" rel="nofollow">リンク</a></p>',
+  );
+
+  // Act
+  retargetFragmentLinks(retargetFragmentLinks(frag));
+
+  // Assert
+  assert.equal(
+    frag.querySelector("a").getAttribute("rel"),
+    "nofollow noopener noreferrer",
+  );
+});
