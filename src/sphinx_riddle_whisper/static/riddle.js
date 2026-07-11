@@ -1039,9 +1039,12 @@ export function installRiddlePopover(doc, options = {}) {
       }
     }
 
-    // 脚注・用語トリガ。
+    // 脚注・用語トリガ。レベル2（ポップ内 term）は click では開かない:
+    // target="_blank" による新タブ遷移（ブラウザ既定動作）へ委ね、下の閉じ
+    // ロジックへ落とす（hover で開いた古いレベル2があれば closePopover(2) で閉じる）。
+    // ネストポップの表示は hover / focus 経路でのみ行う。
     const triggerEl = findTriggerFromEvent(event, triggerSelector, nested);
-    if (triggerEl !== null) {
+    if (triggerEl !== null && levelOfTrigger(triggerEl) === 1) {
       if (openOnClick) {
         openFromTrigger(triggerEl);
       }
