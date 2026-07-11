@@ -404,6 +404,29 @@ test("hover: レベル1ポップ内 term の mouseenter でレベル2が開く",
   assert.equal(nested.hasAttribute("hidden"), false);
 });
 
+// focus: レベル1ポップ内 term の focusin でもレベル2が開く（focus 経路の回帰防止）。
+// mouseenter 版（直上のテスト）と同じ流儀で、開く起点イベントだけ focusin に差し替える。
+// jsdom は FocusEvent の dispatch に難があるため、他の focusin テスト（install-popover.test.mjs）
+// に倣い、plain Event で代替する。
+test("focus: レベル1ポップ内 term の focusin でレベル2が開く", () => {
+  // Arrange: fake timer で install し、レベル1だけ開く
+  const doc = docWithNestedTerms();
+  const timers = installWithTimers(doc);
+  const level1 = openLevel1(doc);
+  const { Event } = doc.defaultView;
+
+  // Act: ポップ内の用語Bへ focusin → openDelay 経過
+  level1
+    .querySelector('a[href="#term-b"]')
+    .dispatchEvent(new Event("focusin", { bubbles: false, cancelable: true }));
+  timers.tick();
+
+  // Assert
+  const nested = doc.querySelector(NESTED_SELECTOR);
+  assert.notEqual(nested, null);
+  assert.equal(nested.hasAttribute("hidden"), false);
+});
+
 // hover: レベル1ポップ → レベル2ポップへのポインタ移動では両方開いたまま。
 test("hover: レベル1からレベル2ポップへの移動では閉じない", () => {
   // Arrange
