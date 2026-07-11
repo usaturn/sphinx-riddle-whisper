@@ -308,16 +308,25 @@ export function sanitizeFragment(frag) {
 
 /**
  * ポップオーバー挿入前の fragment 内リンクへ新タブ属性を付与する（表示ポリシー）。
- * img 子孫を持つアンカー（画像リンク＝ライトボックス対象）は除外する。
- * target="_blank" には既存 rel を保持したまま noopener / noreferrer をマージ付与する
- * （reverse tabnabbing 防止）。sanitizeFragment の後段で適用する前提
- * （危険スキームの href はサニタイザが先に除去済み）。冪等。
+ * 除外は「ライトボックスが click を実際に横取りするアンカー」のみ:
+ * imagePopup 有効・a.image-reference[href]・resolveImageSrc 非 null の全成立
+ * （click ハンドラのライトボックス判定と同一条件）。
+ * target="_blank" には既存 rel を保持したまま noopener / noreferrer を
+ * マージ付与する（reverse tabnabbing 防止）。sanitizeFragment の後段で
+ * 適用する前提（危険スキームの href はサニタイザが先に除去済み）。冪等。
  * @param {DocumentFragment} frag 走査対象（破壊的に変更する）
+ * @param {object} [options] オプション
+ * @param {boolean} [options.imagePopup] 画像ライトボックスが有効か（既定 false）
+ * @param {string} [options.baseURI] 相対 href 解決のベース（doc.baseURI）
  * @returns {DocumentFragment} 走査済みの frag
  */
-export function retargetFragmentLinks(frag) {
+export function retargetFragmentLinks(frag, { imagePopup = false, baseURI } = {}) {
   for (const anchor of frag.querySelectorAll("a[href]")) {
-    if (anchor.querySelector("img") !== null) {
+    if (
+      imagePopup &&
+      anchor.matches(IMAGE_TRIGGER_SELECTOR) &&
+      resolveImageSrc(anchor, baseURI) !== null
+    ) {
       continue;
     }
     anchor.setAttribute("target", "_blank");
@@ -812,8 +821,11 @@ export function installRiddlePopover(doc, options = {}) {
       );
       state.hoverWired = true;
     }
-    // 表示ポリシー: ポップ内リンクは新しいタブで開く（画像リンクは除外）。
-    popover.replaceChildren(retargetFragmentLinks(result.fragment));
+    // 表示ポリシー: ポップ内リンクは新しいタブで開く
+    // （ライトボックスが click を横取りする画像リンクのみ除外）。
+    popover.replaceChildren(
+      retargetFragmentLinks(result.fragment, { imagePopup, baseURI: doc.baseURI }),
+    );
     // a11y: 開く時に role='tooltip' を付与し、参照用の id を確保して、
     // トリガへ aria-describedby=popover.id を設定する（レベル別 id）。
     popover.setAttribute("role", "tooltip");
