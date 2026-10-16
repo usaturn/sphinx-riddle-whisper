@@ -6,6 +6,8 @@ enabled=False バイパスを観点ごとに確認する。
 合成 HTML 文字列のみで検証し、Sphinx 依存は持ち込まない。
 """
 
+from bs4 import BeautifulSoup
+
 from sphinx_riddle_whisper.sanitize import sanitize_html
 
 
@@ -475,7 +477,13 @@ def test_text_attributes_containing_src_data_are_not_destroyed():
     assert 'src="https://example.test/safe.png"' in result
     assert 'title="write src=data:text/html,evil"' in result
     assert 'href="https://example.test/"' in result
-    assert 'alt="1 > 0 src=data:text/html,evil"' in result
+    # nh3 0.3.7 以降は属性値の < と > を文字参照で出力するので、
+    # 引用符内の > を含む alt は出力の文字列ではなく parse した値で比べる。
+    other = BeautifulSoup(result, "html.parser").find(
+        "img", src="https://example.test/other.png"
+    )
+    assert other is not None
+    assert other["alt"] == "1 > 0 src=data:text/html,evil"
     assert 'src="https://example.test/other.png"' in result
 
 
