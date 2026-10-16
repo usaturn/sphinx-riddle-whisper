@@ -190,7 +190,7 @@ class _ScanRepo:
     """検査の step を実行する一時の環境。
 
     履歴は ``B0 ── B1(main)`` と ``B0 ── H1(refs/pull/7/head)``。
-    H1 は .gitleaks.toml を書き換える。workspace は B1 を detached で checkout した clone。
+    H1 は既定で .gitleaks.toml を書き換える。workspace は B1 を detached で checkout した clone。
     """
 
     workspace: Path
@@ -229,15 +229,30 @@ def _git(cwd: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _commit(repo: Path, files: dict[str, str], message: str) -> str:
+def _commit(repo: Path, files: dict[str, str | None], message: str) -> str:
+    """files を書いて commit する。値が None のファイルは削除する。"""
     for name, text in files.items():
-        (repo / name).write_text(text, encoding="utf-8")
+        if text is None:
+            (repo / name).unlink()
+        else:
+            (repo / name).write_text(text, encoding="utf-8")
     _git(repo, "add", "--all")
     _git(repo, "commit", "-q", "-m", message)
     return _git(repo, "rev-parse", "HEAD")
 
 
-def _make_scan_repo(tmp_path: Path, *, base_files: dict[str, str]) -> _ScanRepo:
+_DEFAULT_PR_FILES: dict[str, str | None] = {
+    ".gitleaks.toml": _PR_CONFIG,
+    "pr.txt": "pr\n",
+}
+
+
+def _make_scan_repo(
+    tmp_path: Path,
+    *,
+    base_files: dict[str, str | None],
+    pr_files: dict[str, str | None] = _DEFAULT_PR_FILES,
+) -> _ScanRepo:
     origin = tmp_path / "origin.git"
     src = tmp_path / "src"
     workspace = tmp_path / "workspace"
@@ -245,7 +260,7 @@ def _make_scan_repo(tmp_path: Path, *, base_files: dict[str, str]) -> _ScanRepo:
     _git(tmp_path, "init", "-q", "-b", "main", str(src))
     merge_base = _commit(src, base_files, "base")
     _git(src, "checkout", "-q", "-b", "pr")
-    head_sha = _commit(src, {".gitleaks.toml": _PR_CONFIG, "pr.txt": "pr\n"}, "pr")
+    head_sha = _commit(src, pr_files, "pr")
     _git(src, "checkout", "-q", "main")
     base_sha = _commit(src, {"main.txt": "main\n"}, "main")
     _git(src, "push", "-q", str(origin), "main:refs/heads/main", "pr:refs/pull/7/head")
@@ -492,3 +507,33 @@ def test_gitleaksの検出は検査の失敗になる(tmp_path: Path) -> None:
     # Assert: 前提の検査ではなく、gitleaks の結果で失敗している
     assert result.returncode != 0
     assert len(_calls(repo)) == 1
+
+
+@_needs_bash_and_git
+@pytest.mark.parametrize(
+    "pr_files",
+    [
+        pytest.param({".gitleaksignore": "x\n"}, id="pr_adds_gitleaksignore"),
+        pytest.param({".gitleaks.toml": None}, id="pr_deletes_config"),
+    ],
+)
+def test_PRがマージ後の検査を止める変更を含むと失敗する(
+    tmp_path: Path, pr_files: dict[str, str | None]
+) -> None:
+    """PR の検査は base の作業ツリーで動くので、PR 側の変更はマージ後に初めて効く。
+
+    .gitleaksignore を足す・.gitleaks.toml を消す PR を通すと、マージ後は main の push と
+    以降のすべての PR の検査が止まり、それを戻す PR も通らない。開発環境の push 前の検査も
+    PR 側の .gitleaksignore で止まるので、PR の時点で失敗させる。
+    """
+    # Arrange
+    repo = _make_scan_repo(
+        tmp_path, base_files={".gitleaks.toml": _BASE_CONFIG}, pr_files=pr_files
+    )
+
+    # Act
+    result = _run_scan(repo, _pr_event(repo))
+
+    # Assert
+    assert result.returncode != 0
+    assert _calls(repo) == []
