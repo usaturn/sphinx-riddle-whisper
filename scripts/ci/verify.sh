@@ -7,6 +7,7 @@
 #
 # 終了コード: すべて成功なら 0、失敗した手順があればその終了コード。
 # 未知のプロファイル名・余分な引数は、何も実行せずに 64。
+# シグナルで打ち切られたら 128 + シグナル番号（HUP 129、INT 130、QUIT 131、TERM 143）。
 #
 # 対象外: tox による複数版の実行（py311〜py313 は CI の test ジョブで確かめる。
 # ここの pytest はプロジェクトの Python 1 つだけ）、CodeQL・zizmor、ブラウザを使う検査。
@@ -33,25 +34,32 @@ if [[ "$profile" != full ]]; then
     exit 64
 fi
 
-cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.."
+# CDPATH があると、相対パスの cd が別のディレクトリへ移り得る
+CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.."
 
 exec </dev/null
 export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 out="$(mktemp -d "${TMPDIR:-/tmp}/srw-verify.XXXXXX")"
+# 最後の手順まで終えたときだけ 1 にする。passed は、これと終了コード 0 の両方がそろったときだけ出す
+completed=0
 on_exit() {
     local rc=$?
     rm -rf -- "${out:?}" || printf 'verify.sh: could not remove %s\n' "$out" >&2
-    if ((rc == 0)); then
+    if ((rc == 0 && completed)); then
         printf '\nverify.sh: %s passed\n' "$profile" >&2
     else
+        # trap の無いシグナルで打ち切られると、終了コード 0 のままここに来ることがある
+        ((rc != 0)) || rc=1
         printf '\nverify.sh: %s failed (exit %d)\n' "$profile" "$rc" >&2
     fi
     exit "$rc"
 }
 trap on_exit EXIT
-# シグナルで止められたときも EXIT の trap で一時ディレクトリを消す
+# シグナルで止められたときも EXIT の trap で一時ディレクトリを消し、failed を出す
+trap 'exit 129' HUP
 trap 'exit 130' INT
+trap 'exit 131' QUIT
 trap 'exit 143' TERM
 
 # 手順の見出しを出してから実行する。失敗すると set -e で止まる（条件の文脈で呼ばない）
@@ -82,3 +90,5 @@ step uv run --no-sync sphinx-build -W docs "$out/html"
 step uv audit --locked
 step uv build --out-dir "$out/dist" --clear
 step uvx twine check --strict "$out"/dist/*
+
+completed=1
