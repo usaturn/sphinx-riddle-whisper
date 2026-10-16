@@ -583,7 +583,7 @@ def test_singlehtml注入template内のURIが出力ルート外へパストラ�
         # 出力ルートへ結合し正規化した結果。先頭に '..' が残れば出力ルートより
         # 上位へ脱出している（パストラバーサル）。
         resolved = posixpath.normpath(posixpath.join(page_dir, path))
-        if resolved.startswith("..") or resolved.startswith("/"):
+        if resolved.startswith(("..", "/")):
             escaping.append((uri, resolved))
 
     assert not escaping, (
@@ -853,7 +853,7 @@ def test_singlehtml注入template内の敵対相対リンクが出力ルート�
         # 出力ルートへ結合し正規化した結果。先頭に '..' が残れば出力ルートより
         # 上位へ脱出している（パストラバーサル）。
         resolved = posixpath.normpath(posixpath.join(page_dir, path))
-        if resolved.startswith("..") or resolved.startswith("/"):
+        if resolved.startswith(("..", "/")):
             escaping.append((uri, resolved))
 
     assert not escaping, (

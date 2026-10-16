@@ -70,7 +70,7 @@ def _is_safe_image_data_uri(value: str) -> bool:
     """
     head = value.lstrip().lower()
     return any(
-        head == mime or head.startswith(mime + ";") or head.startswith(mime + ",")
+        head == mime or head.startswith((mime + ";", mime + ","))
         for mime in _SAFE_IMAGE_DATA_MIME
     )
 
