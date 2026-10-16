@@ -397,7 +397,7 @@ def test_注入template内の再ベースURIが出力ルート外へパストラ
         # 参照ページの出力ディレクトリへ結合し正規化した結果。先頭に '..' が
         # 残れば出力ルートより上位へ脱出している（パストラバーサル）。
         resolved = posixpath.normpath(posixpath.join(page_dir, path))
-        if resolved.startswith("..") or resolved.startswith("/"):
+        if resolved.startswith(("..", "/")):
             escaping.append((uri, resolved))
 
     assert not escaping, (
