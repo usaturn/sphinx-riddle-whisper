@@ -3,16 +3,28 @@
 CI 充実化 Spec（2026-07-04）の要点 — 全アクションの SHA ピン留め・
 最小 permissions・uv audit の必須化（continue-on-error 禁止）・
 統合 ci.yml の 4 ジョブ構成 — を回帰テストとして固定する。
+
+secret-scan.yml の検査の step は、pull_request_target で base の定義から動くため、
+追加・変更した PR 自身の CI では動かない。そこで step の run を取り出し、
+一時ディレクトリの git リポジトリと偽の gitleaks で実行して分岐を確かめる。
 """
 
+import json
+import os
 import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 WORKFLOWS_DIR: Path = REPO_ROOT / ".github" / "workflows"
+SECRET_SCAN_WORKFLOW: Path = WORKFLOWS_DIR / "secret-scan.yml"
 
 # owner/repo@<40桁SHA> 形式（ローカル参照 ./ は対象外）
 _SHA_PINNED = re.compile(r"^[^/@]+/[^@]+@[0-9a-f]{40}$")
@@ -21,6 +33,20 @@ _SHA_PINNED = re.compile(r"^[^/@]+/[^@]+@[0-9a-f]{40}$")
 def _load(path: Path) -> dict[str, Any]:
     """workflow YAML を dict として読む。"""
     return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _triggers(workflow: dict[Any, Any]) -> dict[str, Any]:
+    """workflow のトリガーを dict で返す。値の無いトリガーは None にする。
+
+    PyYAML（YAML 1.1）は ``on`` を真偽値として読むので、キーは ``True`` になる。
+    ``on: pull_request``（文字列）と ``on: [push, pull_request]``（リスト）も dict に揃える。
+    """
+    on = workflow.get("on", workflow.get(True))
+    if isinstance(on, str):
+        return {on: None}
+    if isinstance(on, list):
+        return dict.fromkeys(on)
+    return dict(on or {})
 
 
 def _iter_steps(workflow: dict[str, Any]) -> list[dict[str, Any]]:
@@ -77,3 +103,643 @@ def test_全checkoutでpersist_credentialsがfalse() -> None:
                 assert step.get("with", {}).get("persist-credentials") is False, (
                     f"{path.name}: checkout に persist-credentials: false が無い"
                 )
+
+
+def test_secret_scanはbaseの定義で動きpull_requestでは動かない() -> None:
+    """PR の検査は base の workflow の定義（pull_request_target）でだけ動く。
+
+    pull_request で動くと、PR 側が書き換えた定義で同名のジョブが動き、検査を外せる。
+    ジョブ名 secret-scan は ruleset main-required-checks と開発環境側
+    （usaturn/agent-workspace#667）が参照する名前なので固定する。
+    名前を変えるときは、ruleset とこのテストを合わせて変える。
+    """
+    wf = _load(SECRET_SCAN_WORKFLOW)
+
+    triggers = _triggers(wf)
+    assert triggers["push"] == {"branches": ["main"]}
+    assert triggers["pull_request_target"] == {"branches": ["main"]}
+    assert "pull_request" not in triggers
+
+    assert wf["permissions"] == {}
+    job = wf["jobs"]["secret-scan"]
+    assert job["name"] == "secret-scan"
+    assert job["permissions"] == {"contents": "read"}
+
+
+def test_pull_request_targetのcheckoutはPRのheadを指さない() -> None:
+    """pull_request_target は base の権限で動くので、PR のコードを checkout しない。
+
+    checkout の ref を省くと既定の base になるが、意図を明示させるため ref を必須にし、
+    PR の head（github.head_ref や github.event.pull_request.head.*）を指していないことを確かめる。
+    """
+    targets = [
+        path
+        for path in sorted(WORKFLOWS_DIR.glob("*.yml"))
+        if "pull_request_target" in _triggers(_load(path))
+    ]
+    assert targets, "pull_request_target を使う workflow が無い"
+
+    for path in targets:
+        for step in _iter_steps(_load(path)):
+            if not step.get("uses", "").startswith("actions/checkout@"):
+                continue
+            ref = step.get("with", {}).get("ref")
+            assert isinstance(ref, str), f"{path.name}: checkout に ref が無い"
+            assert "head" not in ref, (
+                f"{path.name}: checkout が PR の head を指す: {ref}"
+            )
+
+
+# --- secret-scan.yml の検査の step を実行して確かめる ---------------------------
+
+_needs_bash_and_git = pytest.mark.skipif(
+    shutil.which("bash") is None or shutil.which("git") is None,
+    reason="bash と git が無い環境では検査の step を実行できない",
+)
+
+_BASE_CONFIG = "# base config\n[extend]\nuseDefault = true\n"
+_PR_CONFIG = "# pr config\n"
+_ZERO_SHA = "0" * 40
+# scanner が読む git log の出力に現れたかを調べる目印。秘密の形をしない文字列にする
+_SCAN_MARKER = "SCAN-TARGET-MARKER"
+
+# 偽の gitleaks。呼ばれるたびに、引数・cwd・設定を差し替える環境変数・
+# --config のファイルの中身を JSON の 1 行で記録する。
+# git: Gitleaks 8.30.1 と同じ引数で git log を実行し、走査した commit と、出力に
+#   FAKE_GITLEAKS_MARKER が現れたかも記録して、FAKE_GITLEAKS_EXIT で終わる。引数の組み立ては
+#   8.30.1 の --log-level debug の出力に合わせた: --log-opts があれば値を空白で分割して
+#   git -C <source> log -p -U0 に渡し、既定の引数を足さない。無ければ
+#   --full-history --all --diff-filter=tuxdb を渡す
+# dir: 設定の読み込みの確認。設定に BROKEN があれば読み込めない設定として 1、無ければ 0 で終わる
+_FAKE_GITLEAKS = """\
+import json
+import os
+import subprocess
+import sys
+
+argv = sys.argv[1:]
+config_text = None
+if "--config" in argv:
+    with open(argv[argv.index("--config") + 1], encoding="utf-8") as f:
+        config_text = f.read()
+record = {
+    "argv": argv,
+    "cwd": os.getcwd(),
+    "env": {k: os.environ.get(k) for k in ("GITLEAKS_CONFIG", "GITLEAKS_CONFIG_TOML")},
+    "config_text": config_text,
+}
+exit_code = int(os.environ.get("FAKE_GITLEAKS_EXIT", "0"))
+if argv[0] == "git":
+    log_opts = [a.removeprefix("--log-opts=") for a in argv if a.startswith("--log-opts=")]
+    if log_opts:
+        opts = log_opts[-1].split(" ")
+    else:
+        opts = ["--full-history", "--all", "--diff-filter=tuxdb"]
+
+    def git_log(*args):
+        return subprocess.run(
+            ["git", "-C", argv[-1], "log", *args, *opts],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+
+    record["commits"] = git_log("--format=%H").split()
+    record["marker_seen"] = os.environ["FAKE_GITLEAKS_MARKER"] in git_log("-p", "-U0")
+elif argv[0] == "dir":
+    record["target_entries"] = os.listdir(argv[-1])
+    exit_code = 1 if "BROKEN" in config_text else 0
+with open(os.environ["FAKE_GITLEAKS_LOG"], "a", encoding="utf-8") as f:
+    f.write(json.dumps(record) + "\\n")
+sys.exit(exit_code)
+"""
+
+
+@dataclass
+class _ScanRepo:
+    """検査の step を実行する一時の環境。
+
+    履歴は ``B0 ── B1(main)`` と ``B0 ── H1(refs/pull/7/head)``。
+    H1 は既定で .gitleaks.toml を書き換え、B1 は既定で main.txt を足す。
+    workspace は B1 を detached で checkout した clone。
+    pr_merge_files を渡すと、H1 に B1 をマージした commit M を refs/pull/7/head にする
+    （head_sha は M、merge_base は B0 のまま）。
+    """
+
+    workspace: Path
+    base_sha: str
+    head_sha: str
+    merge_base: str
+    bin_dir: Path
+    log: Path
+
+
+def _git_env() -> dict[str, str]:
+    """利用者の git の設定と GIT_* の環境変数を読まない環境。"""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env.update(
+        {
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_AUTHOR_NAME": "test",
+            "GIT_AUTHOR_EMAIL": "test@example.invalid",
+            "GIT_COMMITTER_NAME": "test",
+            "GIT_COMMITTER_EMAIL": "test@example.invalid",
+        }
+    )
+    return env
+
+
+def _git(cwd: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        env=_git_env(),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.strip()
+
+
+@dataclass(frozen=True)
+class _Symlink:
+    """_commit でシンボリックリンクにするファイル。target はリンクの先。"""
+
+    target: str
+
+
+# _commit のファイルの値: 文字列は通常のファイルの内容、None は削除、
+# dict はその中身（名前 → 内容）を持つディレクトリ、_Symlink はシンボリックリンク
+_Files = dict[str, str | None | dict[str, str] | _Symlink]
+
+
+def _commit(repo: Path, files: _Files, message: str) -> str:
+    """files を書いて commit する。既にあるパスは、種類を変えられるように先に消す。"""
+    for name, entry in files.items():
+        path = repo / name
+        if path.is_dir() and not path.is_symlink():
+            shutil.rmtree(path)
+        elif entry is None or path.is_symlink() or path.exists():
+            # 無いファイルを None で消そうとしたら、ここで止める
+            path.unlink()
+        if isinstance(entry, _Symlink):
+            path.symlink_to(entry.target)
+        elif isinstance(entry, dict):
+            path.mkdir()
+            for child, text in entry.items():
+                (path / child).write_text(text, encoding="utf-8")
+        elif entry is not None:
+            path.write_text(entry, encoding="utf-8")
+    _git(repo, "add", "--all")
+    _git(repo, "commit", "-q", "-m", message)
+    return _git(repo, "rev-parse", "HEAD")
+
+
+_DEFAULT_PR_FILES: _Files = {
+    ".gitleaks.toml": _PR_CONFIG,
+    "pr.txt": "pr\n",
+}
+_DEFAULT_MAIN_FILES: _Files = {"main.txt": "main\n"}
+
+
+def _make_scan_repo(
+    tmp_path: Path,
+    *,
+    base_files: _Files,
+    pr_files: _Files = _DEFAULT_PR_FILES,
+    main_files: _Files = _DEFAULT_MAIN_FILES,
+    pr_merge_files: _Files | None = None,
+) -> _ScanRepo:
+    origin = tmp_path / "origin.git"
+    src = tmp_path / "src"
+    workspace = tmp_path / "workspace"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "init", "-q", "-b", "main", str(src))
+    merge_base = _commit(src, base_files, "base")
+    _git(src, "checkout", "-q", "-b", "pr")
+    head_sha = _commit(src, pr_files, "pr")
+    _git(src, "checkout", "-q", "main")
+    base_sha = _commit(src, main_files, "main")
+    if pr_merge_files is not None:
+        # PR に main を取り込む。競合したら pr_merge_files で解消し、マージ commit にする
+        _git(src, "checkout", "-q", "pr")
+        merge = subprocess.run(
+            ["git", "merge", "-q", "--no-commit", "--no-ff", "main"],
+            cwd=src,
+            env=_git_env(),
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert merge.returncode in (0, 1), merge.stderr
+        head_sha = _commit(src, pr_merge_files, "merge main into pr")
+        _git(src, "checkout", "-q", "main")
+    _git(src, "push", "-q", str(origin), "main:refs/heads/main", "pr:refs/pull/7/head")
+    # actions/checkout（fetch-depth: 0）と同じく、refs/pull/* は取得しない
+    _git(tmp_path, "clone", "-q", str(origin), str(workspace))
+    _git(workspace, "checkout", "-q", "--detach", base_sha)
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake = bin_dir / "gitleaks"
+    fake.write_text(f"#!{sys.executable}\n{_FAKE_GITLEAKS}", encoding="utf-8")
+    fake.chmod(0o755)
+    return _ScanRepo(
+        workspace=workspace,
+        base_sha=base_sha,
+        head_sha=head_sha,
+        merge_base=merge_base,
+        bin_dir=bin_dir,
+        log=tmp_path / "gitleaks.jsonl",
+    )
+
+
+def _pr_event(repo: _ScanRepo) -> dict[str, str]:
+    return {
+        "EVENT_NAME": "pull_request_target",
+        "PR_NUMBER": "7",
+        "BASE_SHA": repo.base_sha,
+        "HEAD_SHA": repo.head_sha,
+        "PUSH_BEFORE": "",
+        "PUSH_AFTER": repo.base_sha,
+    }
+
+
+def _push_event(
+    repo: _ScanRepo, *, before: str, event_name: str = "push"
+) -> dict[str, str]:
+    return {
+        "EVENT_NAME": event_name,
+        "PR_NUMBER": "",
+        "BASE_SHA": "",
+        "HEAD_SHA": "",
+        "PUSH_BEFORE": before,
+        "PUSH_AFTER": repo.base_sha,
+    }
+
+
+def _scan_step_script() -> str:
+    """secret-scan ジョブの id: scan の step の run を返す。"""
+    steps = _load(SECRET_SCAN_WORKFLOW)["jobs"]["secret-scan"]["steps"]
+    scan_steps = [step for step in steps if step.get("id") == "scan"]
+    assert len(scan_steps) == 1, "secret-scan ジョブに id: scan の step が 1 つだけ無い"
+    return scan_steps[0]["run"]
+
+
+def _run_scan(
+    repo: _ScanRepo, event: dict[str, str], *, gitleaks_exit: int = 0
+) -> subprocess.CompletedProcess[str]:
+    """GitHub の runner と同じ bash のオプションで、workspace を cwd にして実行する。"""
+    script = repo.workspace.parent / "scan-step.sh"
+    script.write_text(_scan_step_script(), encoding="utf-8")
+    env = _git_env()
+    env.update(
+        {
+            "PATH": f"{repo.bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "GITHUB_WORKSPACE": str(repo.workspace),
+            # 検査の step がこれらを消すことを確かめる
+            "GITLEAKS_CONFIG": str(repo.workspace.parent / "env-config.toml"),
+            "GITLEAKS_CONFIG_TOML": "[extend]\nuseDefault = false\n",
+            "FAKE_GITLEAKS_LOG": str(repo.log),
+            "FAKE_GITLEAKS_EXIT": str(gitleaks_exit),
+            "FAKE_GITLEAKS_MARKER": _SCAN_MARKER,
+            **event,
+        }
+    )
+    return subprocess.run(
+        ["bash", "--noprofile", "--norc", "-eo", "pipefail", str(script)],
+        cwd=repo.workspace,
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def _calls(repo: _ScanRepo, subcommand: str) -> list[dict[str, Any]]:
+    """偽の gitleaks の subcommand の呼び出しの記録。呼ばれていなければ空。
+
+    ``git`` は scanner（秘密の検査）、``dir`` は設定の読み込みの確認。
+    """
+    if not repo.log.exists():
+        return []
+    records = [
+        json.loads(line) for line in repo.log.read_text(encoding="utf-8").splitlines()
+    ]
+    return [record for record in records if record["argv"][0] == subcommand]
+
+
+def _config_arg(call: dict[str, Any]) -> str:
+    argv: list[str] = call["argv"]
+    return argv[argv.index("--config") + 1]
+
+
+@_needs_bash_and_git
+def test_PRの検査はbaseの設定とmerge_baseからの範囲を使う(tmp_path: Path) -> None:
+    """PR の head が .gitleaks.toml を書き換えても、base の設定で PR の commit だけを検査する。
+
+    書き換えた設定は、マージ後に base の設定になるので、Gitleaks が読み込めるかだけを確かめる。
+    """
+    # Arrange: base の設定は _BASE_CONFIG、PR の head は _PR_CONFIG に書き換える
+    repo = _make_scan_repo(tmp_path, base_files={".gitleaks.toml": _BASE_CONFIG})
+
+    # Act
+    result = _run_scan(repo, _pr_event(repo))
+
+    # Assert: scanner を 1 回、base の設定で呼び、PR の commit だけを走査する
+    assert result.returncode == 0, result.stderr
+    [call] = _calls(repo, "git")
+    assert call["argv"][-1] == "."
+    assert "--redact" in call["argv"]
+    assert "--ignore-gitleaks-allow" in call["argv"]
+    assert call["commits"] == [repo.head_sha]
+    assert _config_arg(call) == f"{repo.workspace}/.gitleaks.toml"
+    assert call["config_text"] == _BASE_CONFIG
+    assert call["env"] == {"GITLEAKS_CONFIG": None, "GITLEAKS_CONFIG_TOML": None}
+    assert Path(call["cwd"]).resolve() == repo.workspace.resolve()
+    # マージ後に base の設定になる PR の設定を、空のディレクトリに対して読み込ませる
+    [check] = _calls(repo, "dir")
+    assert check["config_text"] == _PR_CONFIG
+    assert check["target_entries"] == []
+    assert check["env"] == {"GITLEAKS_CONFIG": None, "GITLEAKS_CONFIG_TOML": None}
+    # 確認に使った一時ディレクトリを残さない
+    assert not Path(_config_arg(check)).exists()
+    # PR の head を checkout していない
+    assert _git(repo.workspace, "rev-parse", "HEAD") == repo.base_sha
+    assert not (repo.workspace / "pr.txt").exists()
+
+
+@_needs_bash_and_git
+@pytest.mark.parametrize(
+    "case",
+    [
+        "head_moved",
+        "checkout_not_base",
+        "bad_pr_number",
+        "bad_base_sha",
+        "bad_head_sha",
+    ],
+)
+def test_PRの検査は前提が崩れると検査せずに失敗する(tmp_path: Path, case: str) -> None:
+    """イベントの値の形、checkout した base、取得した PR の head のどれかが食い違えば止まる。"""
+    # Arrange
+    repo = _make_scan_repo(tmp_path, base_files={".gitleaks.toml": _BASE_CONFIG})
+    event = _pr_event(repo)
+    if case == "head_moved":
+        # 待ちの間に PR の head が進み、イベントの head.sha と refs/pull/7/head が違う
+        event["HEAD_SHA"] = repo.merge_base
+    elif case == "checkout_not_base":
+        _git(repo.workspace, "checkout", "-q", "--detach", repo.merge_base)
+    elif case == "bad_pr_number":
+        event["PR_NUMBER"] = "7; true"
+    elif case == "bad_base_sha":
+        event["BASE_SHA"] = repo.base_sha + "0"
+    elif case == "bad_head_sha":
+        event["HEAD_SHA"] = repo.head_sha[:39]
+
+    # Act
+    result = _run_scan(repo, event)
+
+    # Assert
+    assert result.returncode != 0
+    assert _calls(repo, "git") == []
+
+
+@_needs_bash_and_git
+@pytest.mark.parametrize(
+    "base_files",
+    [
+        pytest.param({"README": "base\n"}, id="no_config"),
+        pytest.param(
+            {".gitleaks.toml": _BASE_CONFIG, ".gitleaksignore": "x\n"},
+            id="gitleaksignore",
+        ),
+    ],
+)
+def test_baseに設定が無いか除外ファイルがあると検査せずに失敗する(
+    tmp_path: Path, base_files: _Files
+) -> None:
+    """base の .gitleaks.toml だけを規則にする。.gitleaksignore は Gitleaks が暗黙に読むので止める。"""
+    # Arrange
+    repo = _make_scan_repo(tmp_path, base_files=base_files)
+
+    # Act
+    result = _run_scan(repo, _push_event(repo, before=repo.merge_base))
+
+    # Assert
+    assert result.returncode != 0
+    assert _calls(repo, "git") == []
+
+
+@_needs_bash_and_git
+@pytest.mark.parametrize(
+    ("event_name", "before", "expect_range"),
+    [
+        pytest.param("push", "merge_base", True, id="push"),
+        pytest.param("push", _ZERO_SHA, False, id="push_new_branch"),
+        pytest.param("workflow_dispatch", "", False, id="workflow_dispatch"),
+    ],
+)
+def test_pushはbeforeからの範囲か全履歴を検査する(
+    tmp_path: Path, event_name: str, before: str, expect_range: bool
+) -> None:
+    """push は before..after。before が使えない push と手動の実行は全履歴（全 ref）を検査する。"""
+    # Arrange
+    repo = _make_scan_repo(tmp_path, base_files={".gitleaks.toml": _BASE_CONFIG})
+    before_sha = repo.merge_base if before == "merge_base" else before
+
+    # Act
+    result = _run_scan(
+        repo, _push_event(repo, before=before_sha, event_name=event_name)
+    )
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    [call] = _calls(repo, "git")
+    if expect_range:
+        # before（B0）の後の commit だけ
+        assert call["commits"] == [repo.base_sha]
+    else:
+        assert {repo.merge_base, repo.base_sha} <= set(call["commits"])
+    assert _config_arg(call) == f"{repo.workspace}/.gitleaks.toml"
+    assert call["config_text"] == _BASE_CONFIG
+
+
+@_needs_bash_and_git
+@pytest.mark.parametrize(
+    ("pr_files", "main_files", "pr_merge_files"),
+    [
+        # PR と main が同じ行を変えて競合し、解消した内容にだけ目印がある
+        pytest.param(
+            {"settings.txt": "branch\n"},
+            {"settings.txt": "main-change\n"},
+            {"settings.txt": f"{_SCAN_MARKER}\n"},
+            id="conflict_resolution",
+        ),
+        # 競合の無いマージで、どちらの親にも無いファイルを足す
+        pytest.param(
+            {"pr.txt": "pr\n"},
+            {"main.txt": "main\n"},
+            {"merged.txt": f"{_SCAN_MARKER}\n"},
+            id="file_added_in_clean_merge",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "event_name", ["pull_request_target", "push", "workflow_dispatch"]
+)
+def test_マージcommitで初めて入った内容も検査する(
+    tmp_path: Path,
+    event_name: str,
+    pr_files: _Files,
+    main_files: _Files,
+    pr_merge_files: _Files,
+) -> None:
+    """PR に main を取り込んだマージ commit の内容を、PR・push・手動のどの経路でも scanner に渡す。
+
+    git log -p は既定でマージ commit の差分を出さないので、競合の解消やマージ時の追加で
+    初めて入った内容は、範囲を指定しても全履歴でも scanner に届かない。
+    """
+    # Arrange: refs/pull/7/head は、PR の commit に main をマージした commit
+    repo = _make_scan_repo(
+        tmp_path,
+        base_files={".gitleaks.toml": _BASE_CONFIG, "settings.txt": "original\n"},
+        pr_files=pr_files,
+        main_files=main_files,
+        pr_merge_files=pr_merge_files,
+    )
+    if event_name == "pull_request_target":
+        event = _pr_event(repo)
+    else:
+        # PR の head が main に入った後の push（before は取り込む前の main）と、その後の手動の実行
+        before = repo.base_sha if event_name == "push" else ""
+        event = _push_event(repo, before=before, event_name=event_name)
+        event["PUSH_AFTER"] = repo.head_sha
+        _git(repo.workspace, "fetch", "-q", "origin", "refs/pull/7/head")
+        _git(repo.workspace, "checkout", "-q", "--detach", repo.head_sha)
+
+    # Act
+    result = _run_scan(repo, event)
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    [call] = _calls(repo, "git")
+    assert call["marker_seen"]
+
+
+@_needs_bash_and_git
+def test_pushでcheckoutがafterと違うと検査せずに失敗する(tmp_path: Path) -> None:
+    # Arrange: イベントの sha と checkout した commit が違う
+    repo = _make_scan_repo(tmp_path, base_files={".gitleaks.toml": _BASE_CONFIG})
+    event = _push_event(repo, before=repo.merge_base)
+    event["PUSH_AFTER"] = repo.head_sha
+
+    # Act
+    result = _run_scan(repo, event)
+
+    # Assert
+    assert result.returncode != 0
+    assert _calls(repo, "git") == []
+
+
+@_needs_bash_and_git
+def test_gitleaksの検出は検査の失敗になる(tmp_path: Path) -> None:
+    """gitleaks は検出があると 0 以外で終わる。その終了コードを握りつぶさない。"""
+    # Arrange
+    repo = _make_scan_repo(tmp_path, base_files={".gitleaks.toml": _BASE_CONFIG})
+
+    # Act
+    result = _run_scan(repo, _pr_event(repo), gitleaks_exit=1)
+
+    # Assert: 前提の検査ではなく、gitleaks の結果で失敗している
+    assert result.returncode != 0
+    assert len(_calls(repo, "git")) == 1
+
+
+@_needs_bash_and_git
+@pytest.mark.parametrize(
+    "pr_files",
+    [
+        pytest.param({".gitleaksignore": "x\n"}, id="pr_adds_gitleaksignore"),
+        pytest.param({".gitleaks.toml": None}, id="pr_deletes_config"),
+        # 偽の gitleaks の dir は BROKEN を含む設定を読み込めない設定として扱う
+        pytest.param({".gitleaks.toml": "# BROKEN\n"}, id="pr_breaks_config"),
+        pytest.param(
+            {".gitleaks.toml": {"rules.toml": _BASE_CONFIG}},
+            id="pr_makes_config_directory",
+        ),
+        pytest.param(
+            {".gitleaks.toml": _Symlink("missing.toml")},
+            id="pr_makes_config_symlink",
+        ),
+    ],
+)
+def test_PRがマージ後の検査を止める変更を含むと失敗する(
+    tmp_path: Path, pr_files: _Files
+) -> None:
+    """PR の検査は base の作業ツリーで動くので、PR 側の変更はマージ後に初めて効く。
+
+    マージ結果に .gitleaksignore がある、マージ結果の .gitleaks.toml が通常のファイルでない、
+    Gitleaks が読み込めない PR を通すと、マージ後は main の push と以降のすべての PR の検査が
+    止まり、それを戻す PR も通らない。そこで PR の検査では、base と PR の head を
+    マージした結果の状態を確かめ、scanner を呼ぶ前に失敗させる。
+    """
+    # Arrange
+    repo = _make_scan_repo(
+        tmp_path, base_files={".gitleaks.toml": _BASE_CONFIG}, pr_files=pr_files
+    )
+
+    # Act
+    result = _run_scan(repo, _pr_event(repo))
+
+    # Assert
+    assert result.returncode != 0
+    assert _calls(repo, "git") == []
+
+
+@_needs_bash_and_git
+@pytest.mark.parametrize(
+    ("base_files", "main_files"),
+    [
+        pytest.param(
+            {".gitleaks.toml": _BASE_CONFIG}, _DEFAULT_MAIN_FILES, id="config_unchanged"
+        ),
+        # PR は設定の導入前に分岐していて、head には .gitleaks.toml が無い
+        pytest.param(
+            {"README": "base\n"},
+            {".gitleaks.toml": _BASE_CONFIG},
+            id="pr_branched_before_config",
+        ),
+        # merge-base にあった .gitleaksignore を main だけが消し、head には残っている
+        pytest.param(
+            {".gitleaks.toml": _BASE_CONFIG, ".gitleaksignore": "x\n"},
+            {".gitleaksignore": None},
+            id="main_removed_gitleaksignore",
+        ),
+    ],
+)
+def test_設定に触れないPRはbase側の変化にかかわらず検査する(
+    tmp_path: Path, base_files: _Files, main_files: _Files
+) -> None:
+    """PR の head の状態ではなく、マージ結果で判定する。
+
+    base 側だけで変わった .gitleaks.toml・.gitleaksignore を PR の変更と取り違えない。
+    マージ結果の .gitleaks.toml が base と同じなら、読み込みの確認（dir）は呼ばない。
+    """
+    # Arrange: PR は設定に関係の無いファイルだけを変える
+    repo = _make_scan_repo(
+        tmp_path,
+        base_files=base_files,
+        pr_files={"pr.txt": "pr\n"},
+        main_files=main_files,
+    )
+
+    # Act
+    result = _run_scan(repo, _pr_event(repo))
+
+    # Assert
+    assert result.returncode == 0, result.stderr
+    [call] = _calls(repo, "git")
+    assert call["config_text"] == _BASE_CONFIG
+    assert _calls(repo, "dir") == []
