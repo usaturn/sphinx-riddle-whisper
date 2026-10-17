@@ -296,6 +296,33 @@ Documentation
 The full documentation is built with Sphinx from the ``docs/`` directory of this
 repository.
 
+Development
+===========
+
+``scripts/ci/verify.sh`` runs the checks of the ``lint``, ``test``, ``docs``,
+and ``audit-and-package`` CI jobs locally, in the same order, and stops at the
+first failing step. It needs `uv <https://docs.astral.sh/uv/>`__, Node.js, and
+Corepack. From a clone of this repository, run:
+
+.. code-block:: bash
+
+   ./scripts/ci/verify.sh
+
+The script runs the tests on one Python version only. The CI ``test`` job runs
+them on every supported version with tox, and CodeQL, zizmor, and the secret
+scan run only in CI.
+
+Pull requests to ``main`` and pushes to ``main`` are scanned for secrets by the
+``secret-scan`` workflow with `Gitleaks <https://github.com/gitleaks/gitleaks>`__.
+For pull requests, the workflow runs on ``pull_request_target``, so the workflow
+and ``.gitleaks.toml`` always come from ``main``, and a pull request cannot
+change the rules of its own scan. Only the commits of the pull request are
+scanned, including the changes made in merge commits. The scan also fails if
+merging the pull request would add a ``.gitleaksignore`` file, or would leave
+``.gitleaks.toml`` missing, not a regular file, or impossible for Gitleaks to
+load. Put exceptions in ``.gitleaks.toml``; a change to it takes effect for the
+scans that run after it is merged into ``main``.
+
 License
 =======
 

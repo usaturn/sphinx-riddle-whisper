@@ -295,6 +295,34 @@ Sphinx は ``:align:`` 未指定のテーブルを ``align-default`` class 付�
 完全なドキュメントは、本リポジトリの ``docs/`` ディレクトリから Sphinx でビルド
 できます。
 
+開発
+====
+
+``scripts/ci/verify.sh`` は、CI の ``lint``・``test``・``docs``・
+``audit-and-package`` ジョブの検査を同じ順にローカルで実行し、最初に失敗した
+手順で止まります。実行には
+`uv <https://docs.astral.sh/uv/>`__、Node.js、Corepack が必要です。
+リポジトリをクローンした場所で、次を実行します:
+
+.. code-block:: bash
+
+   ./scripts/ci/verify.sh
+
+このスクリプトは、テストを 1 つの Python のバージョンだけで実行します。
+CI の ``test`` ジョブはサポートするすべてのバージョンで tox によりテストを
+実行し、CodeQL・zizmor・シークレットの検査は CI でだけ実行します。
+
+``main`` 向けのプルリクエストと ``main`` へのプッシュは、``secret-scan``
+ワークフローが `Gitleaks <https://github.com/gitleaks/gitleaks>`__ で
+シークレットを検査します。プルリクエストでは ``pull_request_target`` で
+動くため、ワークフローと ``.gitleaks.toml`` は常に ``main`` のものが使われ、
+プルリクエストは自身の検査の規則を変えられません。検査するのは
+プルリクエストのコミットだけで、マージコミットで加わった変更も含みます。
+マージすると ``.gitleaksignore`` が追加される、または ``.gitleaks.toml`` が
+無くなる・通常のファイルでなくなる・Gitleaks で読み込めなくなる
+プルリクエストも、検査で失敗します。例外は ``.gitleaks.toml`` に書きます。
+その変更は、``main`` にマージされた後に動く検査から有効になります。
+
 ライセンス
 ==========
 
